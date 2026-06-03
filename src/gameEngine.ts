@@ -1,12 +1,18 @@
-import type { Club, GameState, LeagueTeam, MatchEvent, MatchResult, Player, Position, Tactic, TransferMessage } from './types';
+import type { AcademyProspect, Club, GameState, LeagueTeam, MatchEvent, MatchResult, Player, Position, Tactic, TransferMessage } from './types';
 
 const firstNames = ['Minh', 'Bảo', 'Khang', 'Duy', 'Long', 'Nam', 'Quân', 'Huy', 'Phong', 'Đạt', 'Việt', 'Sơn', 'Tuấn', 'Hải', 'Khoa'];
 const lastNames = ['Nguyễn', 'Trần', 'Lê', 'Phạm', 'Hoàng', 'Phan', 'Vũ', 'Đặng', 'Bùi', 'Đỗ', 'Võ', 'Huỳnh'];
 const botClubs = ['Sài Gòn Tigers', 'Hà Nội Dragons', 'Mekong United', 'Đà Nẵng Warriors', 'Huế Imperial', 'Nha Trang Waves', 'Cần Thơ Lions'];
+const MAX_ACTIONS = 3;
 
 const rand = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 const clamp = (value: number, min = 1, max = 99) => Math.max(min, Math.min(max, value));
 const id = () => crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+const msg = (type: TransferMessage['type'], text: string): TransferMessage => ({ type, text });
+
+function spendAction(state: GameState, cost = 1): GameState | null {
+  return state.actionsRemaining >= cost ? { ...state, actionsRemaining: state.actionsRemaining - cost } : null;
+}
 
 function positionForIndex(index: number): Position {
   if (index < 2) return 'GK';
@@ -15,13 +21,12 @@ function positionForIndex(index: number): Position {
   return 'FW';
 }
 
-function generatePlayer(index: number, qualityOffset = 0): Player {
+function generatePlayer(index: number, qualityOffset = 0, forcedAge?: number): Player {
   const position = positionForIndex(index % 22);
-  const age = rand(17, 33);
+  const age = forcedAge ?? rand(17, 33);
   const base = rand(48, 72) + qualityOffset;
   const potential = clamp(base + rand(3, age < 22 ? 25 : 10));
   const boost = (target: Position) => position === target ? rand(8, 18) : rand(-3, 6);
-
   const attack = clamp(base + boost('FW'));
   const defense = clamp(base + boost('DF'));
   const goalkeeping = position === 'GK' ? clamp(base + rand(12, 22)) : rand(5, 25);
@@ -31,7 +36,7 @@ function generatePlayer(index: number, qualityOffset = 0): Player {
   const speed = clamp(base + rand(-8, 12));
   const stamina = clamp(base + rand(-5, 12));
   const overall = position === 'GK'
-    ? Math.round((goalkeeping * 0.65 + defense * 0.15 + passing * 0.1 + stamina * 0.1))
+    ? Math.round(goalkeeping * 0.65 + defense * 0.15 + passing * 0.1 + stamina * 0.1)
     : Math.round((attack + defense + speed + stamina + technique + passing + shooting) / 7);
 
   return {
@@ -58,17 +63,25 @@ function generatePlayer(index: number, qualityOffset = 0): Player {
 }
 
 export function generatePlayers(): Player[] {
-  return Array.from({ length: 22 }, (_, index) => generatePlayer(index)).sort((a, b) => b.overall - a.overall);
+  return Array.from({ length: 22 }, (_, i) => generatePlayer(i)).sort((a, b) => b.overall - a.overall);
 }
 
 export function generateTransferMarket(count = 20): Player[] {
-  return Array.from({ length: count }, (_, index) => generatePlayer(index, rand(-4, 8)))
-    .map(player => ({
-      ...player,
-      value: Math.round(player.value * 1.25),
-      salary: Math.round(player.salary * 1.15),
-    }))
+  return Array.from({ length: count }, (_, i) => generatePlayer(i, rand(-4, 8)))
+    .map(p => ({ ...p, value: Math.round(p.value * 1.25), salary: Math.round(p.salary * 1.15) }))
     .sort((a, b) => b.overall - a.overall);
+}
+
+export function generateAcademyProspects(count = 3): AcademyProspect[] {
+  return Array.from({ length: count }, (_, i) => {
+    const roll = rand(1, 100);
+    const rarity: AcademyProspect['rarity'] = roll >= 92 ? 'Wonderkid' : roll >= 65 ? 'Triển vọng' : 'Thường';
+    const offset = rarity === 'Wonderkid' ? -4 : rarity === 'Triển vọng' ? -9 : -14;
+    const p = generatePlayer(i + rand(0, 21), offset, rand(16, 19));
+    const potentialBoost = rarity === 'Wonderkid' ? rand(22, 34) : rarity === 'Triển vọng' ? rand(13, 24) : rand(5, 15);
+    const prospect = { ...p, potential: clamp(p.overall + potentialBoost, 1, 99) };
+    return { ...prospect, signingFee: Math.round(prospect.value * (rarity === 'Wonderkid' ? 0.9 : 0.55)), rarity };
+  }).sort((a, b) => b.potential - a.potential);
 }
 
 export function buildDefaultLineup(players: Player[]): string[] {
@@ -76,70 +89,36 @@ export function buildDefaultLineup(players: Player[]): string[] {
   return [...pick('GK', 1), ...pick('DF', 4), ...pick('MF', 4), ...pick('FW', 2)];
 }
 
-export function createNewGame(clubName: string, stadium: string): GameState {
-  const players = generatePlayers();
-  const club: Club = {
-    id: id(),
-    name: clubName.trim() || 'PMEDIA FC',
-    stadium: stadium.trim() || 'Empire Arena',
-    budget: 5_000_000,
-    reputation: 25,
-    fans: 8_000,
-    tactic: 'balanced',
-    lineup: buildDefaultLineup(players),
-  };
-
-  const league = createLeague(club.name);
-  const fixtures = createFixtures(club.name, league.map(t => t.name));
-
-  return { club, players, transferMarket: generateTransferMarket(), league, fixtures, currentRound: 1, season: 1, lastMatch: null, transferMessage: null, lastSeasonSummary: null };
-}
-
 export function createLeague(userClubName: string): LeagueTeam[] {
-  const names = [userClubName, ...botClubs];
-  return names.map((name, index) => ({
-    id: id(),
-    name,
-    power: index === 0 ? 62 : rand(54, 74),
-    played: 0,
-    won: 0,
-    drawn: 0,
-    lost: 0,
-    goalsFor: 0,
-    goalsAgainst: 0,
-    points: 0,
+  return [userClubName, ...botClubs].map((name, index) => ({
+    id: id(), name, power: index === 0 ? 62 : rand(54, 74), played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, points: 0,
   }));
 }
 
 export function createFixtures(userClubName: string, names: string[]): MatchResult[] {
   const opponents = names.filter(n => n !== userClubName);
   return opponents.flatMap((opponent, index) => ([
-    { id: id(), round: index + 1, home: userClubName, away: opponent, homeScore: 0, awayScore: 0, events: [], played: false },
-    { id: id(), round: index + 8, home: opponent, away: userClubName, homeScore: 0, awayScore: 0, events: [], played: false },
-  ])).sort((a, b) => a.round - b.round);
+    { id: id(), round: index + 1, day: 3 + index * 4, home: userClubName, away: opponent, homeScore: 0, awayScore: 0, events: [], played: false },
+    { id: id(), round: index + 8, day: 31 + index * 4, home: opponent, away: userClubName, homeScore: 0, awayScore: 0, events: [], played: false },
+  ])).sort((a, b) => a.day - b.day);
 }
 
-function message(type: TransferMessage['type'], text: string): TransferMessage {
-  return { type, text };
+export function createNewGame(clubName: string, stadium: string): GameState {
+  const players = generatePlayers();
+  const club: Club = { id: id(), name: clubName.trim() || 'PMEDIA FC', stadium: stadium.trim() || 'Empire Arena', budget: 5_000_000, reputation: 25, fans: 8_000, tactic: 'balanced', lineup: buildDefaultLineup(players) };
+  const league = createLeague(club.name);
+  return { club, players, transferMarket: generateTransferMarket(), academyProspects: [], league, fixtures: createFixtures(club.name, league.map(t => t.name)), currentRound: 1, season: 1, day: 1, actionsRemaining: MAX_ACTIONS, maxActionsPerDay: MAX_ACTIONS, lastMatch: null, transferMessage: null, lastSeasonSummary: null };
 }
 
 function tacticBonus(tactic: Tactic) {
-  const table = {
-    balanced: { attack: 0, defense: 0 },
-    attacking: { attack: 8, defense: -5 },
-    defensive: { attack: -5, defense: 8 },
-    counter: { attack: 4, defense: 4 },
-    possession: { attack: 3, defense: 2 },
-    pressing: { attack: 6, defense: -2 },
-  };
-  return table[tactic];
+  return { balanced: { attack: 0, defense: 0 }, attacking: { attack: 8, defense: -5 }, defensive: { attack: -5, defense: 8 }, counter: { attack: 4, defense: 4 }, possession: { attack: 3, defense: 2 }, pressing: { attack: 6, defense: -2 } }[tactic];
 }
 
 function teamRating(players: Player[], lineup: string[], tactic: Tactic) {
-  const selected = lineup.map(pid => players.find(p => p.id === pid)).filter(Boolean) as Player[];
-  const active = selected.length ? selected : players.slice(0, 11);
+  const active = (lineup.map(pid => players.find(p => p.id === pid)).filter(Boolean) as Player[]);
+  const selected = active.length ? active : players.slice(0, 11);
   const bonus = tacticBonus(tactic);
-  const avg = (fn: (p: Player) => number) => active.reduce((sum, p) => sum + fn(p), 0) / active.length;
+  const avg = (fn: (p: Player) => number) => selected.reduce((sum, p) => sum + fn(p), 0) / selected.length;
   return {
     attack: avg(p => p.position === 'GK' ? p.passing : (p.attack + p.shooting + p.passing + p.technique) / 4) + bonus.attack,
     defense: avg(p => p.position === 'GK' ? p.goalkeeping : (p.defense + p.stamina + p.speed) / 3) + bonus.defense,
@@ -148,28 +127,15 @@ function teamRating(players: Player[], lineup: string[], tactic: Tactic) {
 }
 
 function goalsFor(attack: number, defense: number, homeBonus: number) {
-  let chances = 0;
+  let goals = 0;
   const edge = attack - defense + homeBonus;
-  const rolls = 5 + rand(0, 3);
-  for (let i = 0; i < rolls; i++) {
-    if (rand(1, 100) + edge > 72) chances++;
-  }
-  return Math.min(5, chances);
+  for (let i = 0; i < 5 + rand(0, 3); i++) if (rand(1, 100) + edge > 72) goals++;
+  return Math.min(5, goals);
 }
 
 function addStanding(team: LeagueTeam, gf: number, ga: number) {
-  team.played++;
-  team.goalsFor += gf;
-  team.goalsAgainst += ga;
-  if (gf > ga) {
-    team.won++;
-    team.points += 3;
-  } else if (gf === ga) {
-    team.drawn++;
-    team.points += 1;
-  } else {
-    team.lost++;
-  }
+  team.played++; team.goalsFor += gf; team.goalsAgainst += ga;
+  if (gf > ga) { team.won++; team.points += 3; } else if (gf === ga) { team.drawn++; team.points += 1; } else team.lost++;
 }
 
 function buildEvents(home: string, away: string, homeScore: number, awayScore: number): MatchEvent[] {
@@ -182,44 +148,48 @@ function buildEvents(home: string, away: string, homeScore: number, awayScore: n
   return events.sort((a, b) => a.minute - b.minute);
 }
 
+export function getTodayMatch(state: GameState) {
+  return state.fixtures.find(f => !f.played && f.day === state.day) || null;
+}
+
+export function advanceDay(state: GameState): GameState {
+  if (isSeasonFinished(state)) return state;
+  const players = state.players.map(p => ({ ...p, fitness: clamp(p.fitness + rand(4, 9)), morale: clamp(p.morale + rand(-1, 2)) }));
+  return { ...state, day: state.day + 1, actionsRemaining: state.maxActionsPerDay, players, transferMessage: msg('info', `Đã sang ngày ${state.day + 1}. Hành động đã được làm mới.`) };
+}
+
 export function simulateNextRound(state: GameState): GameState {
   const club = state.club;
   if (!club) return state;
-  const match = state.fixtures.find(f => !f.played);
-  if (!match) return state;
+  const match = getTodayMatch(state);
+  if (!match) return { ...state, transferMessage: msg('error', 'Hôm nay không có trận đấu. Hãy dùng ngày trống để huấn luyện, scout hoặc chuyển nhượng.') };
+  const actionState = spendAction(state);
+  if (!actionState) return { ...state, transferMessage: msg('error', 'Hôm nay đã hết lượt hành động.') };
 
-  const userRating = teamRating(state.players, club.lineup, club.tactic);
-  const opponent = state.league.find(t => t.name === (match.home === club.name ? match.away : match.home));
+  const userRating = teamRating(actionState.players, club.lineup, club.tactic);
+  const opponent = actionState.league.find(t => t.name === (match.home === club.name ? match.away : match.home));
   const opponentPower = opponent?.power ?? 60;
   const userIsHome = match.home === club.name;
-
   const userGoals = goalsFor(userRating.attack + userRating.overall * 0.2, opponentPower, userIsHome ? 5 : 0);
   const oppGoals = goalsFor(opponentPower, userRating.defense + userRating.overall * 0.15, userIsHome ? 0 : 5);
   const homeScore = userIsHome ? userGoals : oppGoals;
   const awayScore = userIsHome ? oppGoals : userGoals;
-  const events = buildEvents(match.home, match.away, homeScore, awayScore);
-
-  const fixtures = state.fixtures.map(f => f.id === match.id ? { ...f, homeScore, awayScore, events, played: true } : f);
-  const league = state.league.map(t => ({ ...t }));
+  const fixtures = actionState.fixtures.map(f => f.id === match.id ? { ...f, homeScore, awayScore, events: buildEvents(match.home, match.away, homeScore, awayScore), played: true } : f);
+  const league = actionState.league.map(t => ({ ...t }));
   const homeTeam = league.find(t => t.name === match.home);
   const awayTeam = league.find(t => t.name === match.away);
-  if (homeTeam && awayTeam) {
-    addStanding(homeTeam, homeScore, awayScore);
-    addStanding(awayTeam, awayScore, homeScore);
-  }
-
+  if (homeTeam && awayTeam) { addStanding(homeTeam, homeScore, awayScore); addStanding(awayTeam, awayScore, homeScore); }
   const sortedLeague = league.sort((a, b) => b.points - a.points || (b.goalsFor - b.goalsAgainst) - (a.goalsFor - a.goalsAgainst) || b.goalsFor - a.goalsFor);
-  const updatedPlayers = state.players.map(p => ({ ...p, fitness: clamp(p.fitness - rand(2, 8), 30, 100), form: clamp(p.form + (userGoals >= oppGoals ? rand(0, 4) : rand(-4, 1)), 1, 99) }));
+  const players = actionState.players.map(p => ({ ...p, fitness: clamp(p.fitness - rand(2, 8), 30, 100), form: clamp(p.form + (userGoals >= oppGoals ? rand(0, 4) : rand(-4, 1))) }));
   const prize = userGoals > oppGoals ? 180_000 : userGoals === oppGoals ? 75_000 : 20_000;
-  const updatedClub = { ...club, budget: club.budget + prize, fans: club.fans + (userGoals > oppGoals ? 350 : userGoals === oppGoals ? 80 : -120) };
-  const lastMatch = fixtures.find(f => f.id === match.id) || null;
-
-  return { ...state, club: updatedClub, players: updatedPlayers, league: sortedLeague, fixtures, currentRound: state.currentRound + 1, lastMatch };
+  return { ...actionState, club: { ...club, budget: club.budget + prize, fans: club.fans + (userGoals > oppGoals ? 350 : userGoals === oppGoals ? 80 : -120) }, players, league: sortedLeague, fixtures, currentRound: actionState.currentRound + 1, lastMatch: fixtures.find(f => f.id === match.id) || null, transferMessage: msg('success', 'Trận đấu hôm nay đã kết thúc.') };
 }
 
 export function setTactic(state: GameState, tactic: Tactic): GameState {
   if (!state.club) return state;
-  return { ...state, club: { ...state.club, tactic } };
+  const actionState = spendAction(state);
+  if (!actionState) return { ...state, transferMessage: msg('error', 'Hôm nay đã hết lượt hành động.') };
+  return { ...actionState, club: { ...state.club, tactic }, transferMessage: msg('info', 'Đã thay đổi chiến thuật. Mất 1 lượt hành động.') };
 }
 
 export function setLineup(state: GameState, playerId: string): GameState {
@@ -231,63 +201,67 @@ export function setLineup(state: GameState, playerId: string): GameState {
 
 export function trainTeam(state: GameState): GameState {
   if (!state.club) return state;
-  const players = state.players.map(p => {
-    const growth = p.age <= 23 && p.overall < p.potential ? 2 : 1;
-    return {
-      ...p,
-      overall: clamp(p.overall + (Math.random() > 0.72 ? growth : 0)),
-      fitness: clamp(p.fitness + rand(4, 10)),
-      morale: clamp(p.morale + rand(1, 5)),
-    };
-  }).sort((a, b) => b.overall - a.overall);
-  return { ...state, players, club: { ...state.club, budget: state.club.budget - 50_000 } };
+  const actionState = spendAction(state);
+  if (!actionState) return { ...state, transferMessage: msg('error', 'Hôm nay đã hết lượt hành động.') };
+  if (actionState.club!.budget < 50_000) return { ...state, transferMessage: msg('error', 'Không đủ ngân sách để huấn luyện.') };
+  const players = actionState.players.map(p => ({ ...p, overall: clamp(p.overall + (p.age <= 23 && p.overall < p.potential && Math.random() > 0.72 ? 2 : 0)), fitness: clamp(p.fitness + rand(4, 10)), morale: clamp(p.morale + rand(1, 5)) })).sort((a, b) => b.overall - a.overall);
+  return { ...actionState, players, club: { ...actionState.club!, budget: actionState.club!.budget - 50_000 }, transferMessage: msg('success', 'Đội bóng đã hoàn tất buổi huấn luyện hôm nay.') };
 }
 
 export function buyPlayer(state: GameState, playerId: string): GameState {
   if (!state.club) return state;
-  const player = state.transferMarket?.find(p => p.id === playerId);
-  if (!player) return { ...state, transferMessage: message('error', 'Không tìm thấy cầu thủ trên thị trường.') };
-  if (state.club.budget < player.value) {
-    return { ...state, transferMessage: message('error', `Ngân sách không đủ để mua ${player.name}.`) };
-  }
-
-  return {
-    ...state,
-    club: { ...state.club, budget: state.club.budget - player.value },
-    players: [...state.players, player].sort((a, b) => b.overall - a.overall),
-    transferMarket: state.transferMarket.filter(p => p.id !== playerId),
-    transferMessage: message('success', `Đã chiêu mộ ${player.name} với giá ${player.value.toLocaleString('vi-VN')} VND.`),
-  };
+  const actionState = spendAction(state);
+  if (!actionState) return { ...state, transferMessage: msg('error', 'Hôm nay đã hết lượt hành động.') };
+  const player = actionState.transferMarket?.find(p => p.id === playerId);
+  if (!player) return { ...state, transferMessage: msg('error', 'Không tìm thấy cầu thủ trên thị trường.') };
+  if (actionState.club!.budget < player.value) return { ...state, transferMessage: msg('error', `Ngân sách không đủ để mua ${player.name}.`) };
+  return { ...actionState, club: { ...actionState.club!, budget: actionState.club!.budget - player.value }, players: [...actionState.players, player].sort((a, b) => b.overall - a.overall), transferMarket: actionState.transferMarket.filter(p => p.id !== playerId), transferMessage: msg('success', `Đã chiêu mộ ${player.name}.`) };
 }
 
 export function sellPlayer(state: GameState, playerId: string): GameState {
   if (!state.club) return state;
-  if (state.players.length <= 16) {
-    return { ...state, transferMessage: message('error', 'Đội hình còn quá mỏng, không thể bán thêm cầu thủ.') };
-  }
-  const player = state.players.find(p => p.id === playerId);
-  if (!player) return { ...state, transferMessage: message('error', 'Không tìm thấy cầu thủ trong đội.') };
-
+  const actionState = spendAction(state);
+  if (!actionState) return { ...state, transferMessage: msg('error', 'Hôm nay đã hết lượt hành động.') };
+  if (actionState.players.length <= 16) return { ...state, transferMessage: msg('error', 'Đội hình còn quá mỏng, không thể bán thêm cầu thủ.') };
+  const player = actionState.players.find(p => p.id === playerId);
+  if (!player) return { ...state, transferMessage: msg('error', 'Không tìm thấy cầu thủ trong đội.') };
   const saleValue = Math.round(player.value * 0.85);
-  return {
-    ...state,
-    club: { ...state.club, budget: state.club.budget + saleValue, lineup: state.club.lineup.filter(id => id !== playerId) },
-    players: state.players.filter(p => p.id !== playerId),
-    transferMarket: [...(state.transferMarket ?? []), { ...player, value: Math.round(player.value * 1.15) }].sort((a, b) => b.overall - a.overall),
-    transferMessage: message('success', `Đã bán ${player.name} và thu về ${saleValue.toLocaleString('vi-VN')} VND.`),
-  };
+  return { ...actionState, club: { ...actionState.club!, budget: actionState.club!.budget + saleValue, lineup: actionState.club!.lineup.filter(id => id !== playerId) }, players: actionState.players.filter(p => p.id !== playerId), transferMarket: [...(actionState.transferMarket ?? []), { ...player, value: Math.round(player.value * 1.15) }].sort((a, b) => b.overall - a.overall), transferMessage: msg('success', `Đã bán ${player.name} và thu về ${saleValue.toLocaleString('vi-VN')} VND.`) };
 }
 
 export function refreshTransferMarket(state: GameState): GameState {
   if (!state.club) return state;
+  const actionState = spendAction(state);
+  if (!actionState) return { ...state, transferMessage: msg('error', 'Hôm nay đã hết lượt hành động.') };
   const cost = 120_000;
-  if (state.club.budget < cost) return { ...state, transferMessage: message('error', 'Không đủ ngân sách để làm mới thị trường.') };
-  return {
-    ...state,
-    club: { ...state.club, budget: state.club.budget - cost },
-    transferMarket: generateTransferMarket(),
-    transferMessage: message('info', 'Đã làm mới danh sách cầu thủ trên thị trường chuyển nhượng.'),
-  };
+  if (actionState.club!.budget < cost) return { ...state, transferMessage: msg('error', 'Không đủ ngân sách để làm mới thị trường.') };
+  return { ...actionState, club: { ...actionState.club!, budget: actionState.club!.budget - cost }, transferMarket: generateTransferMarket(), transferMessage: msg('info', 'Đã làm mới danh sách cầu thủ trên thị trường chuyển nhượng.') };
+}
+
+export function scoutAcademy(state: GameState): GameState {
+  if (!state.club) return state;
+  const actionState = spendAction(state);
+  if (!actionState) return { ...state, transferMessage: msg('error', 'Hôm nay đã hết lượt hành động.') };
+  const cost = 180_000;
+  if (actionState.club!.budget < cost) return { ...state, transferMessage: msg('error', 'Không đủ ngân sách để scout tài năng trẻ.') };
+  return { ...actionState, club: { ...actionState.club!, budget: actionState.club!.budget - cost }, academyProspects: generateAcademyProspects(), transferMessage: msg('success', 'Bộ phận scout đã gửi về 3 tài năng trẻ mới.') };
+}
+
+export function signAcademyProspect(state: GameState, playerId: string): GameState {
+  if (!state.club) return state;
+  const actionState = spendAction(state);
+  if (!actionState) return { ...state, transferMessage: msg('error', 'Hôm nay đã hết lượt hành động.') };
+  const prospect = actionState.academyProspects.find(p => p.id === playerId);
+  if (!prospect) return { ...state, transferMessage: msg('error', 'Không tìm thấy cầu thủ trẻ này.') };
+  if (actionState.club!.budget < prospect.signingFee) return { ...state, transferMessage: msg('error', `Không đủ ngân sách để ký ${prospect.name}.`) };
+  const { signingFee, rarity, ...player } = prospect;
+  return { ...actionState, club: { ...actionState.club!, budget: actionState.club!.budget - signingFee }, players: [...actionState.players, player].sort((a, b) => b.overall - a.overall), academyProspects: actionState.academyProspects.filter(p => p.id !== playerId), transferMessage: msg('success', `Đã ký hợp đồng với ${player.name} (${rarity}).`) };
+}
+
+export function restTeam(state: GameState): GameState {
+  const actionState = spendAction(state);
+  if (!actionState) return { ...state, transferMessage: msg('error', 'Hôm nay đã hết lượt hành động.') };
+  return { ...actionState, players: actionState.players.map(p => ({ ...p, fitness: clamp(p.fitness + rand(10, 18)), morale: clamp(p.morale + rand(1, 4)) })), transferMessage: msg('success', 'Toàn đội đã nghỉ hồi phục.') };
 }
 
 export function isSeasonFinished(state: GameState): boolean {
@@ -304,67 +278,20 @@ function calculateSeasonReward(rank: number) {
 
 function progressPlayerForNewSeason(player: Player): Player {
   const age = player.age + 1;
-  const youngGrowth = age <= 23 && player.overall < player.potential ? rand(1, 4) : 0;
-  const primeGrowth = age > 23 && age <= 28 && player.overall < player.potential && Math.random() > 0.65 ? 1 : 0;
+  const growth = age <= 23 && player.overall < player.potential ? rand(1, 4) : age <= 28 && player.overall < player.potential && Math.random() > 0.65 ? 1 : 0;
   const decline = age >= 32 ? rand(0, 2) : 0;
-  const nextOverall = clamp(player.overall + youngGrowth + primeGrowth - decline);
+  const nextOverall = clamp(player.overall + growth - decline);
   const ratio = nextOverall / Math.max(player.overall, 1);
-
-  return {
-    ...player,
-    age,
-    overall: nextOverall,
-    value: Math.round(nextOverall * nextOverall * 120),
-    salary: Math.round(player.salary * (ratio > 1 ? 1.04 : 0.99)),
-    fitness: rand(84, 100),
-    morale: clamp(player.morale + rand(-3, 6)),
-    form: rand(45, 85),
-    attack: clamp(Math.round(player.attack * ratio)),
-    defense: clamp(Math.round(player.defense * ratio)),
-    speed: clamp(Math.round(player.speed * (age >= 31 ? 0.98 : ratio))),
-    stamina: clamp(Math.round(player.stamina * (age >= 31 ? 0.98 : ratio))),
-    technique: clamp(Math.round(player.technique * ratio)),
-    passing: clamp(Math.round(player.passing * ratio)),
-    shooting: clamp(Math.round(player.shooting * ratio)),
-    goalkeeping: clamp(Math.round(player.goalkeeping * ratio)),
-  };
+  return { ...player, age, overall: nextOverall, value: Math.round(nextOverall * nextOverall * 120), salary: Math.round(player.salary * (ratio > 1 ? 1.04 : 0.99)), fitness: rand(84, 100), morale: clamp(player.morale + rand(-3, 6)), form: rand(45, 85), attack: clamp(Math.round(player.attack * ratio)), defense: clamp(Math.round(player.defense * ratio)), speed: clamp(Math.round(player.speed * (age >= 31 ? 0.98 : ratio))), stamina: clamp(Math.round(player.stamina * (age >= 31 ? 0.98 : ratio))), technique: clamp(Math.round(player.technique * ratio)), passing: clamp(Math.round(player.passing * ratio)), shooting: clamp(Math.round(player.shooting * ratio)), goalkeeping: clamp(Math.round(player.goalkeeping * ratio)) };
 }
 
 export function startNextSeason(state: GameState): GameState {
   if (!state.club || !isSeasonFinished(state)) return state;
-
   const userRank = state.league.findIndex(team => team.name === state.club?.name) + 1;
   const champion = state.league[0]?.name ?? state.club.name;
   const reward = calculateSeasonReward(userRank || state.league.length);
   const players = state.players.map(progressPlayerForNewSeason).sort((a, b) => b.overall - a.overall);
-  const club: Club = {
-    ...state.club,
-    budget: state.club.budget + reward.prize,
-    reputation: clamp(state.club.reputation + reward.reputationGain, 1, 100),
-    fans: Math.max(0, state.club.fans + reward.fanGain),
-    lineup: buildDefaultLineup(players),
-  };
+  const club: Club = { ...state.club, budget: state.club.budget + reward.prize, reputation: clamp(state.club.reputation + reward.reputationGain, 1, 100), fans: Math.max(0, state.club.fans + reward.fanGain), lineup: buildDefaultLineup(players) };
   const league = createLeague(club.name);
-  const fixtures = createFixtures(club.name, league.map(t => t.name));
-
-  return {
-    ...state,
-    club,
-    players,
-    transferMarket: generateTransferMarket(),
-    league,
-    fixtures,
-    currentRound: 1,
-    season: state.season + 1,
-    lastMatch: null,
-    transferMessage: message('info', 'Mùa giải mới đã bắt đầu. Thị trường chuyển nhượng đã được làm mới.'),
-    lastSeasonSummary: {
-      season: state.season,
-      champion,
-      userRank,
-      prize: reward.prize,
-      reputationGain: reward.reputationGain,
-      fanGain: reward.fanGain,
-    },
-  };
+  return { ...state, club, players, transferMarket: generateTransferMarket(), academyProspects: [], league, fixtures: createFixtures(club.name, league.map(t => t.name)), currentRound: 1, season: state.season + 1, day: 1, actionsRemaining: MAX_ACTIONS, maxActionsPerDay: MAX_ACTIONS, lastMatch: null, transferMessage: msg('info', 'Mùa giải mới đã bắt đầu. Lịch thi đấu và thị trường chuyển nhượng đã được làm mới.'), lastSeasonSummary: { season: state.season, champion, userRank, prize: reward.prize, reputationGain: reward.reputationGain, fanGain: reward.fanGain } };
 }
