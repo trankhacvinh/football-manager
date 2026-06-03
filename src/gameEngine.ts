@@ -1,4 +1,4 @@
-import type { Club, GameState, LeagueTeam, MatchEvent, MatchResult, Player, Position, Tactic } from './types';
+import type { Club, GameState, LeagueTeam, MatchEvent, MatchResult, Player, Position, Tactic, TransferMessage } from './types';
 
 const firstNames = ['Minh', 'Bảo', 'Khang', 'Duy', 'Long', 'Nam', 'Quân', 'Huy', 'Phong', 'Đạt', 'Việt', 'Sơn', 'Tuấn', 'Hải', 'Khoa'];
 const lastNames = ['Nguyễn', 'Trần', 'Lê', 'Phạm', 'Hoàng', 'Phan', 'Vũ', 'Đặng', 'Bùi', 'Đỗ', 'Võ', 'Huỳnh'];
@@ -15,48 +15,60 @@ function positionForIndex(index: number): Position {
   return 'FW';
 }
 
+function generatePlayer(index: number, qualityOffset = 0): Player {
+  const position = positionForIndex(index % 22);
+  const age = rand(17, 33);
+  const base = rand(48, 72) + qualityOffset;
+  const potential = clamp(base + rand(3, age < 22 ? 25 : 10));
+  const boost = (target: Position) => position === target ? rand(8, 18) : rand(-3, 6);
+
+  const attack = clamp(base + boost('FW'));
+  const defense = clamp(base + boost('DF'));
+  const goalkeeping = position === 'GK' ? clamp(base + rand(12, 22)) : rand(5, 25);
+  const shooting = clamp(base + boost('FW'));
+  const passing = clamp(base + boost('MF'));
+  const technique = clamp(base + rand(-5, 12));
+  const speed = clamp(base + rand(-8, 12));
+  const stamina = clamp(base + rand(-5, 12));
+  const overall = position === 'GK'
+    ? Math.round((goalkeeping * 0.65 + defense * 0.15 + passing * 0.1 + stamina * 0.1))
+    : Math.round((attack + defense + speed + stamina + technique + passing + shooting) / 7);
+
+  return {
+    id: id(),
+    name: `${lastNames[rand(0, lastNames.length - 1)]} ${firstNames[rand(0, firstNames.length - 1)]}`,
+    age,
+    position,
+    overall,
+    potential,
+    value: overall * overall * 120,
+    salary: overall * 75,
+    fitness: rand(82, 100),
+    morale: rand(55, 90),
+    form: rand(45, 85),
+    attack,
+    defense,
+    speed,
+    stamina,
+    technique,
+    passing,
+    shooting,
+    goalkeeping,
+  };
+}
+
 export function generatePlayers(): Player[] {
-  return Array.from({ length: 22 }, (_, index) => {
-    const position = positionForIndex(index);
-    const age = rand(17, 33);
-    const base = rand(48, 72);
-    const potential = clamp(base + rand(3, age < 22 ? 25 : 10));
-    const boost = (target: Position) => position === target ? rand(8, 18) : rand(-3, 6);
+  return Array.from({ length: 22 }, (_, index) => generatePlayer(index)).sort((a, b) => b.overall - a.overall);
+}
 
-    const attack = clamp(base + boost('FW'));
-    const defense = clamp(base + boost('DF'));
-    const goalkeeping = position === 'GK' ? clamp(base + rand(12, 22)) : rand(5, 25);
-    const shooting = clamp(base + boost('FW'));
-    const passing = clamp(base + boost('MF'));
-    const technique = clamp(base + rand(-5, 12));
-    const speed = clamp(base + rand(-8, 12));
-    const stamina = clamp(base + rand(-5, 12));
-    const overall = position === 'GK'
-      ? Math.round((goalkeeping * 0.65 + defense * 0.15 + passing * 0.1 + stamina * 0.1))
-      : Math.round((attack + defense + speed + stamina + technique + passing + shooting) / 7);
-
-    return {
-      id: id(),
-      name: `${lastNames[rand(0, lastNames.length - 1)]} ${firstNames[rand(0, firstNames.length - 1)]}`,
-      age,
-      position,
-      overall,
-      potential,
-      value: overall * overall * 120,
-      salary: overall * 75,
-      fitness: rand(82, 100),
-      morale: rand(55, 90),
-      form: rand(45, 85),
-      attack,
-      defense,
-      speed,
-      stamina,
-      technique,
-      passing,
-      shooting,
-      goalkeeping,
-    };
-  }).sort((a, b) => b.overall - a.overall);
+export function generateTransferMarket(count = 20): Player[] {
+  return Array.from({ length: count }, (_, index) => generatePlayer(index, rand(-4, 8)))
+    .map(player => ({
+      ...player,
+      value: Math.round(player.value * 1.25),
+      salary: Math.round(player.salary * 1.15),
+    }))
+    .sort((a, b) => b.overall - a.overall);
 }
 
 export function buildDefaultLineup(players: Player[]): string[] {
@@ -80,7 +92,7 @@ export function createNewGame(clubName: string, stadium: string): GameState {
   const league = createLeague(club.name);
   const fixtures = createFixtures(club.name, league.map(t => t.name));
 
-  return { club, players, league, fixtures, currentRound: 1, season: 1, lastMatch: null };
+  return { club, players, transferMarket: generateTransferMarket(), league, fixtures, currentRound: 1, season: 1, lastMatch: null, transferMessage: null };
 }
 
 export function createLeague(userClubName: string): LeagueTeam[] {
@@ -105,6 +117,10 @@ export function createFixtures(userClubName: string, names: string[]): MatchResu
     { id: id(), round: index + 1, home: userClubName, away: opponent, homeScore: 0, awayScore: 0, events: [], played: false },
     { id: id(), round: index + 8, home: opponent, away: userClubName, homeScore: 0, awayScore: 0, events: [], played: false },
   ])).sort((a, b) => a.round - b.round);
+}
+
+function message(type: TransferMessage['type'], text: string): TransferMessage {
+  return { type, text };
 }
 
 function tacticBonus(tactic: Tactic) {
@@ -225,4 +241,51 @@ export function trainTeam(state: GameState): GameState {
     };
   }).sort((a, b) => b.overall - a.overall);
   return { ...state, players, club: { ...state.club, budget: state.club.budget - 50_000 } };
+}
+
+export function buyPlayer(state: GameState, playerId: string): GameState {
+  if (!state.club) return state;
+  const player = state.transferMarket?.find(p => p.id === playerId);
+  if (!player) return { ...state, transferMessage: message('error', 'Không tìm thấy cầu thủ trên thị trường.') };
+  if (state.club.budget < player.value) {
+    return { ...state, transferMessage: message('error', `Ngân sách không đủ để mua ${player.name}.`) };
+  }
+
+  return {
+    ...state,
+    club: { ...state.club, budget: state.club.budget - player.value },
+    players: [...state.players, player].sort((a, b) => b.overall - a.overall),
+    transferMarket: state.transferMarket.filter(p => p.id !== playerId),
+    transferMessage: message('success', `Đã chiêu mộ ${player.name} với giá ${player.value.toLocaleString('vi-VN')} VND.`),
+  };
+}
+
+export function sellPlayer(state: GameState, playerId: string): GameState {
+  if (!state.club) return state;
+  if (state.players.length <= 16) {
+    return { ...state, transferMessage: message('error', 'Đội hình còn quá mỏng, không thể bán thêm cầu thủ.') };
+  }
+  const player = state.players.find(p => p.id === playerId);
+  if (!player) return { ...state, transferMessage: message('error', 'Không tìm thấy cầu thủ trong đội.') };
+
+  const saleValue = Math.round(player.value * 0.85);
+  return {
+    ...state,
+    club: { ...state.club, budget: state.club.budget + saleValue, lineup: state.club.lineup.filter(id => id !== playerId) },
+    players: state.players.filter(p => p.id !== playerId),
+    transferMarket: [...(state.transferMarket ?? []), { ...player, value: Math.round(player.value * 1.15) }].sort((a, b) => b.overall - a.overall),
+    transferMessage: message('success', `Đã bán ${player.name} và thu về ${saleValue.toLocaleString('vi-VN')} VND.`),
+  };
+}
+
+export function refreshTransferMarket(state: GameState): GameState {
+  if (!state.club) return state;
+  const cost = 120_000;
+  if (state.club.budget < cost) return { ...state, transferMessage: message('error', 'Không đủ ngân sách để làm mới thị trường.') };
+  return {
+    ...state,
+    club: { ...state.club, budget: state.club.budget - cost },
+    transferMarket: generateTransferMarket(),
+    transferMessage: message('info', 'Đã làm mới danh sách cầu thủ trên thị trường chuyển nhượng.'),
+  };
 }
