@@ -84,11 +84,21 @@ export interface AcademyProspect extends Player {
   rarity: 'Thường' | 'Triển vọng' | 'Wonderkid';
 }
 
+export interface ClubNews {
+  id: string;
+  day: number;
+  season: number;
+  type: 'good' | 'bad' | 'neutral' | 'market' | 'academy' | 'match';
+  title: string;
+  text: string;
+}
+
 export interface GameState {
   club: Club | null;
   players: Player[];
   transferMarket: Player[];
   academyProspects: AcademyProspect[];
+  news: ClubNews[];
   league: LeagueTeam[];
   fixtures: MatchResult[];
   currentRound: number;
