@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Trophy, Users, CalendarDays, Dumbbell, RotateCcw, Play, WalletCards, ShoppingCart, RefreshCw } from 'lucide-react';
+import { Trophy, Users, CalendarDays, Dumbbell, RotateCcw, Play, WalletCards, ShoppingCart, RefreshCw, X, Eye } from 'lucide-react';
 import { buyPlayer, createNewGame, refreshTransferMarket, sellPlayer, setLineup, setTactic, simulateNextRound, trainTeam } from './gameEngine';
 import { clearGame, loadGame, saveGame } from './storage';
 import type { GameState, Player, Tactic } from './types';
@@ -44,7 +44,52 @@ function NewGame({ onCreate }: { onCreate: (state: GameState) => void }) {
   </main>;
 }
 
-function PlayersTable({ state, setState }: { state: GameState; setState: (s: GameState) => void }) {
+function PlayerDetailModal({ player, origin, onClose, onBuy, onSell, canBuy }: { player: Player | null; origin: 'squad' | 'market'; onClose: () => void; onBuy?: () => void; onSell?: () => void; canBuy?: boolean }) {
+  if (!player) return null;
+  const mainStats = [
+    ['Tấn công', player.attack],
+    ['Phòng thủ', player.defense],
+    ['Tốc độ', player.speed],
+    ['Thể lực', player.stamina],
+    ['Kỹ thuật', player.technique],
+    ['Chuyền bóng', player.passing],
+    ['Dứt điểm', player.shooting],
+    ['Thủ môn', player.goalkeeping],
+  ];
+
+  return <div className="modal-backdrop" onClick={onClose}>
+    <section className="player-modal" onClick={e => e.stopPropagation()}>
+      <button className="modal-close" onClick={onClose}><X size={18} /></button>
+      <div className="modal-hero">
+        <div>
+          <span className={`pos pos-${player.position.toLowerCase()}`}>{player.position}</span>
+          <h2>{player.name}</h2>
+          <p>{player.age} tuổi • Giá trị {money(player.value)} • Lương {money(player.salary)}</p>
+        </div>
+        <div className="overall-badge"><span>OVR</span><strong>{player.overall}</strong></div>
+      </div>
+      <div className="detail-summary">
+        <div><span>Tiềm năng</span><strong>{player.potential}</strong></div>
+        <div><span>Thể lực</span><strong>{player.fitness}</strong></div>
+        <div><span>Tinh thần</span><strong>{player.morale}</strong></div>
+        <div><span>Phong độ</span><strong>{player.form}</strong></div>
+      </div>
+      <div className="attribute-grid">
+        {mainStats.map(([label, value]) => <div key={label} className="attribute-row">
+          <div><span>{label}</span><strong>{value}</strong></div>
+          <div className="bar"><i style={{ width: `${value}%` }} /></div>
+        </div>)}
+      </div>
+      <div className="modal-actions">
+        {origin === 'market' && <button disabled={!canBuy} onClick={onBuy}><ShoppingCart size={16} /> Mua cầu thủ</button>}
+        {origin === 'squad' && <button className="danger" onClick={onSell}>Bán cầu thủ</button>}
+        <button className="ghost" onClick={onClose}>Đóng</button>
+      </div>
+    </section>
+  </div>;
+}
+
+function PlayersTable({ state, setState, onView }: { state: GameState; setState: (s: GameState) => void; onView: (player: Player, origin: 'squad' | 'market') => void }) {
   const lineup = state.club?.lineup ?? [];
   return <div className="card">
     <div className="section-title"><h2>Danh sách cầu thủ</h2><span>{lineup.length}/11 đã chọn</span></div>
@@ -52,26 +97,26 @@ function PlayersTable({ state, setState }: { state: GameState; setState: (s: Gam
       <thead><tr><th>Chọn</th><th>Cầu thủ</th><th>VT</th><th>Tuổi</th><th>OVR</th><th>POT</th><th>Thể lực</th><th>Lương</th><th></th></tr></thead>
       <tbody>{state.players.map((p: Player) => <tr key={p.id} className={lineup.includes(p.id) ? 'selected-row' : ''}>
         <td><input type="checkbox" checked={lineup.includes(p.id)} onChange={() => setState(setLineup(state, p.id))} /></td>
-        <td><strong>{p.name}</strong><small>Giá trị {money(p.value)}</small></td>
+        <td><button className="link-button" onClick={() => onView(p, 'squad')}><strong>{p.name}</strong><small>Giá trị {money(p.value)}</small></button></td>
         <td><span className={`pos pos-${p.position.toLowerCase()}`}>{p.position}</span></td>
         <td>{p.age}</td><td>{p.overall}</td><td>{p.potential}</td><td>{p.fitness}</td><td>{currency.format(p.salary)}</td>
-        <td><button className="danger small-btn" onClick={() => setState(sellPlayer(state, p.id))}>Bán</button></td>
+        <td className="row-actions"><button className="ghost small-btn" onClick={() => onView(p, 'squad')}><Eye size={14} /> Xem</button><button className="danger small-btn" onClick={() => setState(sellPlayer(state, p.id))}>Bán</button></td>
       </tr>)}</tbody>
     </table></div>
   </div>;
 }
 
-function TransferMarket({ state, setState }: { state: GameState; setState: (s: GameState) => void }) {
+function TransferMarket({ state, setState, onView }: { state: GameState; setState: (s: GameState) => void; onView: (player: Player, origin: 'squad' | 'market') => void }) {
   const market = state.transferMarket ?? [];
   return <div className="card">
     <div className="section-title"><h2>Thị trường chuyển nhượng</h2><button className="ghost small-btn" onClick={() => setState(refreshTransferMarket(state))}><RefreshCw size={15} /> Làm mới -120.000</button></div>
     {state.transferMessage && <div className={`notice notice-${state.transferMessage.type}`}>{state.transferMessage.text}</div>}
     <div className="market-grid">
       {market.slice(0, 12).map(player => <div key={player.id} className="player-card">
-        <div className="player-card-head"><div><strong>{player.name}</strong><span>{player.age} tuổi • {player.position}</span></div><b>{player.overall}</b></div>
+        <div className="player-card-head"><div><button className="link-button" onClick={() => onView(player, 'market')}><strong>{player.name}</strong><span>{player.age} tuổi • {player.position}</span></button></div><b>{player.overall}</b></div>
         <div className="player-metrics"><span>POT {player.potential}</span><span>Thể lực {player.fitness}</span><span>Lương {currency.format(player.salary)}</span></div>
         <div className="player-price"><span>Giá mua</span><strong>{money(player.value)}</strong></div>
-        <button disabled={(state.club?.budget ?? 0) < player.value} onClick={() => setState(buyPlayer(state, player.id))}><ShoppingCart size={16} /> Mua cầu thủ</button>
+        <div className="card-actions"><button className="ghost" onClick={() => onView(player, 'market')}><Eye size={16} /> Xem chi tiết</button><button disabled={(state.club?.budget ?? 0) < player.value} onClick={() => setState(buyPlayer(state, player.id))}><ShoppingCart size={16} /> Mua</button></div>
       </div>)}
     </div>
   </div>;
@@ -120,8 +165,14 @@ function Fixtures({ state }: { state: GameState }) {
 }
 
 function Dashboard({ state, setState, onReset }: { state: GameState; setState: (s: GameState) => void; onReset: () => void }) {
+  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [selectedOrigin, setSelectedOrigin] = useState<'squad' | 'market'>('squad');
   const avgOverall = useMemo(() => Math.round(state.players.slice(0, 11).reduce((s, p) => s + p.overall, 0) / 11), [state.players]);
   const club = state.club!;
+  const viewPlayer = (player: Player, origin: 'squad' | 'market') => { setSelectedPlayer(player); setSelectedOrigin(origin); };
+  const closeModal = () => setSelectedPlayer(null);
+  const selectedCanBuy = selectedPlayer ? club.budget >= selectedPlayer.value : false;
+
   return <main className="app-shell">
     <header className="topbar"><div><span className="badge">Mùa {state.season}</span><h1>{club.name}</h1><p>{club.stadium}</p></div><button className="ghost" onClick={onReset}><RotateCcw size={16} /> Chơi lại</button></header>
     <section className="stats-grid">
@@ -133,8 +184,8 @@ function Dashboard({ state, setState, onReset }: { state: GameState; setState: (
     <section className="main-grid">
       <div className="left-col">
         <MatchPanel state={state} setState={setState} />
-        <TransferMarket state={state} setState={setState} />
-        <PlayersTable state={state} setState={setState} />
+        <TransferMarket state={state} setState={setState} onView={viewPlayer} />
+        <PlayersTable state={state} setState={setState} onView={viewPlayer} />
       </div>
       <div className="right-col">
         <Tactics state={state} setState={setState} />
@@ -143,6 +194,14 @@ function Dashboard({ state, setState, onReset }: { state: GameState; setState: (
         <Fixtures state={state} />
       </div>
     </section>
+    <PlayerDetailModal
+      player={selectedPlayer}
+      origin={selectedOrigin}
+      canBuy={selectedCanBuy}
+      onClose={closeModal}
+      onBuy={() => { if (selectedPlayer) setState(buyPlayer(state, selectedPlayer.id)); closeModal(); }}
+      onSell={() => { if (selectedPlayer) setState(sellPlayer(state, selectedPlayer.id)); closeModal(); }}
+    />
   </main>;
 }
 
