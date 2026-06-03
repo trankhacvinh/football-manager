@@ -1,8 +1,8 @@
 import type { Club, GameState, LeagueTeam, MatchEvent, MatchResult, Player, Position, Tactic } from './types';
 
-const firstNames = ['Minh', 'Bao', 'Khang', 'Duy', 'Long', 'Nam', 'Quan', 'Huy', 'Phong', 'Dat', 'Viet', 'Son', 'Tuan', 'Hai', 'Khoa'];
-const lastNames = ['Nguyen', 'Tran', 'Le', 'Pham', 'Hoang', 'Phan', 'Vu', 'Dang', 'Bui', 'Do', 'Vo', 'Huynh'];
-const botClubs = ['Saigon Tigers', 'Hanoi Dragons', 'Mekong United', 'Danang Warriors', 'Hue Imperial', 'Nha Trang Waves', 'Can Tho Lions'];
+const firstNames = ['Minh', 'Bảo', 'Khang', 'Duy', 'Long', 'Nam', 'Quân', 'Huy', 'Phong', 'Đạt', 'Việt', 'Sơn', 'Tuấn', 'Hải', 'Khoa'];
+const lastNames = ['Nguyễn', 'Trần', 'Lê', 'Phạm', 'Hoàng', 'Phan', 'Vũ', 'Đặng', 'Bùi', 'Đỗ', 'Võ', 'Huỳnh'];
+const botClubs = ['Sài Gòn Tigers', 'Hà Nội Dragons', 'Mekong United', 'Đà Nẵng Warriors', 'Huế Imperial', 'Nha Trang Waves', 'Cần Thơ Lions'];
 
 const rand = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 const clamp = (value: number, min = 1, max = 99) => Math.max(min, Math.min(max, value));
@@ -157,12 +157,12 @@ function addStanding(team: LeagueTeam, gf: number, ga: number) {
 }
 
 function buildEvents(home: string, away: string, homeScore: number, awayScore: number): MatchEvent[] {
-  const events: MatchEvent[] = [{ minute: 1, type: 'info', text: `Tran dau bat dau: ${home} vs ${away}.` }];
-  for (let i = 0; i < homeScore; i++) events.push({ minute: rand(8, 88), type: 'goal', text: `${home} ghi ban! San nha no tung.` });
-  for (let i = 0; i < awayScore; i++) events.push({ minute: rand(8, 88), type: 'goal', text: `${away} ghi ban sau mot pha tan cong sac net.` });
-  if (Math.random() > 0.55) events.push({ minute: rand(20, 80), type: 'save', text: 'Thu mon co pha cuu thua quan trong.' });
-  if (Math.random() > 0.72) events.push({ minute: rand(55, 90), type: 'injury', text: 'Mot cau thu bi dau nhe va can theo doi sau tran.' });
-  events.push({ minute: 90, type: 'info', text: `Ket thuc tran dau: ${home} ${homeScore}-${awayScore} ${away}.` });
+  const events: MatchEvent[] = [{ minute: 1, type: 'info', text: `Trận đấu bắt đầu: ${home} vs ${away}.` }];
+  for (let i = 0; i < homeScore; i++) events.push({ minute: rand(8, 88), type: 'goal', text: `${home} ghi bàn! Khán đài nổ tung.` });
+  for (let i = 0; i < awayScore; i++) events.push({ minute: rand(8, 88), type: 'goal', text: `${away} ghi bàn sau một pha tấn công sắc nét.` });
+  if (Math.random() > 0.55) events.push({ minute: rand(20, 80), type: 'save', text: 'Thủ môn có pha cứu thua quan trọng.' });
+  if (Math.random() > 0.72) events.push({ minute: rand(55, 90), type: 'injury', text: 'Một cầu thủ bị đau nhẹ và cần theo dõi sau trận.' });
+  events.push({ minute: 90, type: 'info', text: `Kết thúc trận đấu: ${home} ${homeScore}-${awayScore} ${away}.` });
   return events.sort((a, b) => a.minute - b.minute);
 }
 
