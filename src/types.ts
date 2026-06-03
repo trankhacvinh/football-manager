@@ -69,6 +69,15 @@ export interface TransferMessage {
   text: string;
 }
 
+export interface SeasonSummary {
+  season: number;
+  champion: string;
+  userRank: number;
+  prize: number;
+  reputationGain: number;
+  fanGain: number;
+}
+
 export interface GameState {
   club: Club | null;
   players: Player[];
@@ -79,4 +88,5 @@ export interface GameState {
   season: number;
   lastMatch: MatchResult | null;
   transferMessage?: TransferMessage | null;
+  lastSeasonSummary?: SeasonSummary | null;
 }
