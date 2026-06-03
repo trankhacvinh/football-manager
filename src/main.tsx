@@ -5,6 +5,7 @@ import { advanceDay, buyPlayer, createNewGame, getTodayMatch, refreshTransferMar
 import { clearGame, loadGame, saveGame } from './storage';
 import type { AcademyProspect, GameState, Player, Position, Tactic } from './types';
 import './styles.css';
+import './news.css';
 
 const currency = new Intl.NumberFormat('vi-VN');
 const tacticLabels: Record<Tactic, string> = { balanced: 'Cân bằng', attacking: 'Tấn công', defensive: 'Phòng ngự', counter: 'Phản công', possession: 'Kiểm soát bóng', pressing: 'Pressing tầm cao' };
