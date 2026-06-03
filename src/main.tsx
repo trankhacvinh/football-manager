@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Trophy, Users, CalendarDays, Dumbbell, RotateCcw, Play, WalletCards } from 'lucide-react';
-import { createNewGame, setLineup, setTactic, simulateNextRound, trainTeam } from './gameEngine';
+import { Trophy, Users, CalendarDays, Dumbbell, RotateCcw, Play, WalletCards, ShoppingCart, RefreshCw } from 'lucide-react';
+import { buyPlayer, createNewGame, refreshTransferMarket, sellPlayer, setLineup, setTactic, simulateNextRound, trainTeam } from './gameEngine';
 import { clearGame, loadGame, saveGame } from './storage';
 import type { GameState, Player, Tactic } from './types';
 import './styles.css';
@@ -15,6 +15,10 @@ const tacticLabels: Record<Tactic, string> = {
   possession: 'Kiểm soát bóng',
   pressing: 'Pressing tầm cao',
 };
+
+function money(value: number) {
+  return `${currency.format(value)} VND`;
+}
 
 function StatCard({ title, value, icon }: { title: string; value: string; icon: React.ReactNode }) {
   return <div className="card stat-card"><div className="stat-icon">{icon}</div><div><p>{title}</p><strong>{value}</strong></div></div>;
@@ -45,14 +49,31 @@ function PlayersTable({ state, setState }: { state: GameState; setState: (s: Gam
   return <div className="card">
     <div className="section-title"><h2>Danh sách cầu thủ</h2><span>{lineup.length}/11 đã chọn</span></div>
     <div className="table-wrap"><table>
-      <thead><tr><th>Chọn</th><th>Cầu thủ</th><th>VT</th><th>Tuổi</th><th>OVR</th><th>POT</th><th>Thể lực</th><th>Lương</th></tr></thead>
+      <thead><tr><th>Chọn</th><th>Cầu thủ</th><th>VT</th><th>Tuổi</th><th>OVR</th><th>POT</th><th>Thể lực</th><th>Lương</th><th></th></tr></thead>
       <tbody>{state.players.map((p: Player) => <tr key={p.id} className={lineup.includes(p.id) ? 'selected-row' : ''}>
         <td><input type="checkbox" checked={lineup.includes(p.id)} onChange={() => setState(setLineup(state, p.id))} /></td>
-        <td><strong>{p.name}</strong><small>Giá trị {currency.format(p.value)}</small></td>
+        <td><strong>{p.name}</strong><small>Giá trị {money(p.value)}</small></td>
         <td><span className={`pos pos-${p.position.toLowerCase()}`}>{p.position}</span></td>
         <td>{p.age}</td><td>{p.overall}</td><td>{p.potential}</td><td>{p.fitness}</td><td>{currency.format(p.salary)}</td>
+        <td><button className="danger small-btn" onClick={() => setState(sellPlayer(state, p.id))}>Bán</button></td>
       </tr>)}</tbody>
     </table></div>
+  </div>;
+}
+
+function TransferMarket({ state, setState }: { state: GameState; setState: (s: GameState) => void }) {
+  const market = state.transferMarket ?? [];
+  return <div className="card">
+    <div className="section-title"><h2>Thị trường chuyển nhượng</h2><button className="ghost small-btn" onClick={() => setState(refreshTransferMarket(state))}><RefreshCw size={15} /> Làm mới -120.000</button></div>
+    {state.transferMessage && <div className={`notice notice-${state.transferMessage.type}`}>{state.transferMessage.text}</div>}
+    <div className="market-grid">
+      {market.slice(0, 12).map(player => <div key={player.id} className="player-card">
+        <div className="player-card-head"><div><strong>{player.name}</strong><span>{player.age} tuổi • {player.position}</span></div><b>{player.overall}</b></div>
+        <div className="player-metrics"><span>POT {player.potential}</span><span>Thể lực {player.fitness}</span><span>Lương {currency.format(player.salary)}</span></div>
+        <div className="player-price"><span>Giá mua</span><strong>{money(player.value)}</strong></div>
+        <button disabled={(state.club?.budget ?? 0) < player.value} onClick={() => setState(buyPlayer(state, player.id))}><ShoppingCart size={16} /> Mua cầu thủ</button>
+      </div>)}
+    </div>
   </div>;
 }
 
@@ -104,7 +125,7 @@ function Dashboard({ state, setState, onReset }: { state: GameState; setState: (
   return <main className="app-shell">
     <header className="topbar"><div><span className="badge">Mùa {state.season}</span><h1>{club.name}</h1><p>{club.stadium}</p></div><button className="ghost" onClick={onReset}><RotateCcw size={16} /> Chơi lại</button></header>
     <section className="stats-grid">
-      <StatCard title="Ngân sách" value={`${currency.format(club.budget)} VND`} icon={<WalletCards />} />
+      <StatCard title="Ngân sách" value={money(club.budget)} icon={<WalletCards />} />
       <StatCard title="Người hâm mộ" value={currency.format(club.fans)} icon={<Users />} />
       <StatCard title="Sức mạnh đội hình" value={`${avgOverall}/99`} icon={<Trophy />} />
       <StatCard title="Vòng đấu" value={`${Math.min(state.currentRound, 14)}/14`} icon={<CalendarDays />} />
@@ -112,6 +133,7 @@ function Dashboard({ state, setState, onReset }: { state: GameState; setState: (
     <section className="main-grid">
       <div className="left-col">
         <MatchPanel state={state} setState={setState} />
+        <TransferMarket state={state} setState={setState} />
         <PlayersTable state={state} setState={setState} />
       </div>
       <div className="right-col">
