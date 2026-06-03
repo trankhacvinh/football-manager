@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { Trophy, Users, CalendarDays, Dumbbell, RotateCcw, Play, WalletCards, ShoppingCart, RefreshCw, X, Eye } from 'lucide-react';
 import { buyPlayer, createNewGame, refreshTransferMarket, sellPlayer, setLineup, setTactic, simulateNextRound, trainTeam } from './gameEngine';
 import { clearGame, loadGame, saveGame } from './storage';
-import type { GameState, Player, Tactic } from './types';
+import type { GameState, Player, Position, Tactic } from './types';
 import './styles.css';
 
 const currency = new Intl.NumberFormat('vi-VN');
@@ -86,6 +86,32 @@ function PlayerDetailModal({ player, origin, onClose, onBuy, onSell, canBuy }: {
         <button className="ghost" onClick={onClose}>Đóng</button>
       </div>
     </section>
+  </div>;
+}
+
+function FormationPitch({ state, onView }: { state: GameState; onView: (player: Player, origin: 'squad' | 'market') => void }) {
+  const lineupIds = state.club?.lineup ?? [];
+  const selected = lineupIds.map(id => state.players.find(p => p.id === id)).filter(Boolean) as Player[];
+  const group = (pos: Position) => selected.filter(p => p.position === pos);
+  const expected: Record<Position, number> = { GK: 1, DF: 4, MF: 4, FW: 2 };
+  const positions: Position[] = ['FW', 'MF', 'DF', 'GK'];
+  const warnings = (['GK', 'DF', 'MF', 'FW'] as Position[])
+    .filter(pos => group(pos).length !== expected[pos])
+    .map(pos => `${pos}: ${group(pos).length}/${expected[pos]}`);
+
+  return <div className="card">
+    <div className="section-title"><h2>Sơ đồ đội hình 4-4-2</h2><span>{selected.length}/11 cầu thủ</span></div>
+    <div className="pitch">
+      <div className="pitch-lines" />
+      {positions.map(pos => <div key={pos} className={`pitch-line pitch-${pos.toLowerCase()}`}>
+        {group(pos).length ? group(pos).map(player => <button key={player.id} className="pitch-player" onClick={() => onView(player, 'squad')}>
+          <span className={`pos pos-${player.position.toLowerCase()}`}>{player.position}</span>
+          <strong>{player.name.split(' ').slice(-2).join(' ')}</strong>
+          <small>OVR {player.overall}</small>
+        </button>) : <div className="empty-line">Thiếu {pos}</div>}
+      </div>)}
+    </div>
+    {warnings.length > 0 && <div className="formation-warning">Đội hình chưa đúng khuyến nghị 4-4-2: {warnings.join(' • ')}</div>}
   </div>;
 }
 
@@ -184,6 +210,7 @@ function Dashboard({ state, setState, onReset }: { state: GameState; setState: (
     <section className="main-grid">
       <div className="left-col">
         <MatchPanel state={state} setState={setState} />
+        <FormationPitch state={state} onView={viewPlayer} />
         <TransferMarket state={state} setState={setState} onView={viewPlayer} />
         <PlayersTable state={state} setState={setState} onView={viewPlayer} />
       </div>
