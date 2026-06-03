@@ -92,7 +92,7 @@ export function createNewGame(clubName: string, stadium: string): GameState {
   const league = createLeague(club.name);
   const fixtures = createFixtures(club.name, league.map(t => t.name));
 
-  return { club, players, transferMarket: generateTransferMarket(), league, fixtures, currentRound: 1, season: 1, lastMatch: null, transferMessage: null };
+  return { club, players, transferMarket: generateTransferMarket(), league, fixtures, currentRound: 1, season: 1, lastMatch: null, transferMessage: null, lastSeasonSummary: null };
 }
 
 export function createLeague(userClubName: string): LeagueTeam[] {
@@ -287,5 +287,84 @@ export function refreshTransferMarket(state: GameState): GameState {
     club: { ...state.club, budget: state.club.budget - cost },
     transferMarket: generateTransferMarket(),
     transferMessage: message('info', 'Đã làm mới danh sách cầu thủ trên thị trường chuyển nhượng.'),
+  };
+}
+
+export function isSeasonFinished(state: GameState): boolean {
+  return state.fixtures.length > 0 && state.fixtures.every(f => f.played);
+}
+
+function calculateSeasonReward(rank: number) {
+  if (rank === 1) return { prize: 2_000_000, reputationGain: 8, fanGain: 5_000 };
+  if (rank === 2) return { prize: 1_250_000, reputationGain: 5, fanGain: 2_800 };
+  if (rank === 3) return { prize: 850_000, reputationGain: 3, fanGain: 1_600 };
+  if (rank <= 5) return { prize: 450_000, reputationGain: 1, fanGain: 700 };
+  return { prize: 200_000, reputationGain: 0, fanGain: 150 };
+}
+
+function progressPlayerForNewSeason(player: Player): Player {
+  const age = player.age + 1;
+  const youngGrowth = age <= 23 && player.overall < player.potential ? rand(1, 4) : 0;
+  const primeGrowth = age > 23 && age <= 28 && player.overall < player.potential && Math.random() > 0.65 ? 1 : 0;
+  const decline = age >= 32 ? rand(0, 2) : 0;
+  const nextOverall = clamp(player.overall + youngGrowth + primeGrowth - decline);
+  const ratio = nextOverall / Math.max(player.overall, 1);
+
+  return {
+    ...player,
+    age,
+    overall: nextOverall,
+    value: Math.round(nextOverall * nextOverall * 120),
+    salary: Math.round(player.salary * (ratio > 1 ? 1.04 : 0.99)),
+    fitness: rand(84, 100),
+    morale: clamp(player.morale + rand(-3, 6)),
+    form: rand(45, 85),
+    attack: clamp(Math.round(player.attack * ratio)),
+    defense: clamp(Math.round(player.defense * ratio)),
+    speed: clamp(Math.round(player.speed * (age >= 31 ? 0.98 : ratio))),
+    stamina: clamp(Math.round(player.stamina * (age >= 31 ? 0.98 : ratio))),
+    technique: clamp(Math.round(player.technique * ratio)),
+    passing: clamp(Math.round(player.passing * ratio)),
+    shooting: clamp(Math.round(player.shooting * ratio)),
+    goalkeeping: clamp(Math.round(player.goalkeeping * ratio)),
+  };
+}
+
+export function startNextSeason(state: GameState): GameState {
+  if (!state.club || !isSeasonFinished(state)) return state;
+
+  const userRank = state.league.findIndex(team => team.name === state.club?.name) + 1;
+  const champion = state.league[0]?.name ?? state.club.name;
+  const reward = calculateSeasonReward(userRank || state.league.length);
+  const players = state.players.map(progressPlayerForNewSeason).sort((a, b) => b.overall - a.overall);
+  const club: Club = {
+    ...state.club,
+    budget: state.club.budget + reward.prize,
+    reputation: clamp(state.club.reputation + reward.reputationGain, 1, 100),
+    fans: Math.max(0, state.club.fans + reward.fanGain),
+    lineup: buildDefaultLineup(players),
+  };
+  const league = createLeague(club.name);
+  const fixtures = createFixtures(club.name, league.map(t => t.name));
+
+  return {
+    ...state,
+    club,
+    players,
+    transferMarket: generateTransferMarket(),
+    league,
+    fixtures,
+    currentRound: 1,
+    season: state.season + 1,
+    lastMatch: null,
+    transferMessage: message('info', 'Mùa giải mới đã bắt đầu. Thị trường chuyển nhượng đã được làm mới.'),
+    lastSeasonSummary: {
+      season: state.season,
+      champion,
+      userRank,
+      prize: reward.prize,
+      reputationGain: reward.reputationGain,
+      fanGain: reward.fanGain,
+    },
   };
 }
