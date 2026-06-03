@@ -64,12 +64,19 @@ export interface MatchResult {
   played: boolean;
 }
 
+export interface TransferMessage {
+  type: 'success' | 'error' | 'info';
+  text: string;
+}
+
 export interface GameState {
   club: Club | null;
   players: Player[];
+  transferMarket: Player[];
   league: LeagueTeam[];
   fixtures: MatchResult[];
   currentRound: number;
   season: number;
   lastMatch: MatchResult | null;
+  transferMessage?: TransferMessage | null;
 }
