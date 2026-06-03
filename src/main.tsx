@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Trophy, Users, CalendarDays, Dumbbell, RotateCcw, Play, WalletCards, ShoppingCart, RefreshCw, X, Eye } from 'lucide-react';
-import { buyPlayer, createNewGame, refreshTransferMarket, sellPlayer, setLineup, setTactic, simulateNextRound, trainTeam } from './gameEngine';
+import { Trophy, Users, CalendarDays, Dumbbell, RotateCcw, Play, WalletCards, ShoppingCart, RefreshCw, X, Eye, ChevronsRight } from 'lucide-react';
+import { buyPlayer, createNewGame, refreshTransferMarket, sellPlayer, setLineup, setTactic, simulateNextRound, startNextSeason, trainTeam } from './gameEngine';
 import { clearGame, loadGame, saveGame } from './storage';
 import type { GameState, Player, Position, Tactic } from './types';
 import './styles.css';
@@ -159,6 +159,37 @@ function LeagueTable({ state }: { state: GameState }) {
   </div>;
 }
 
+function SeasonSummaryCard({ state, setState }: { state: GameState; setState: (s: GameState) => void }) {
+  const completed = state.fixtures.length > 0 && state.fixtures.every(f => f.played);
+  const summary = state.lastSeasonSummary;
+  const userRank = state.league.findIndex(team => team.name === state.club?.name) + 1;
+  const champion = state.league[0]?.name;
+
+  if (!completed && !summary) return null;
+
+  return <div className="card season-card">
+    <div className="section-title"><h2>Tổng kết mùa giải</h2><Trophy /></div>
+    {completed ? <>
+      <div className="season-hero"><strong>{champion}</strong><span>Nhà vô địch mùa {state.season}</span></div>
+      <div className="detail-summary">
+        <div><span>Thứ hạng của anh</span><strong>#{userRank}</strong></div>
+        <div><span>Trận đã đá</span><strong>{state.fixtures.length}</strong></div>
+        <div><span>Điểm</span><strong>{state.league.find(t => t.name === state.club?.name)?.points ?? 0}</strong></div>
+        <div><span>Fan hiện tại</span><strong>{currency.format(state.club?.fans ?? 0)}</strong></div>
+      </div>
+      <button className="primary" onClick={() => setState(startNextSeason(state))}><ChevronsRight size={18} /> Sang mùa giải mới</button>
+    </> : summary && <>
+      <div className="season-hero"><strong>Mùa {summary.season} đã khép lại</strong><span>Vô địch: {summary.champion}</span></div>
+      <div className="detail-summary">
+        <div><span>Thứ hạng</span><strong>#{summary.userRank}</strong></div>
+        <div><span>Tiền thưởng</span><strong>{money(summary.prize)}</strong></div>
+        <div><span>Danh tiếng</span><strong>+{summary.reputationGain}</strong></div>
+        <div><span>Fan</span><strong>+{currency.format(summary.fanGain)}</strong></div>
+      </div>
+    </>}
+  </div>;
+}
+
 function MatchPanel({ state, setState }: { state: GameState; setState: (s: GameState) => void }) {
   const nextMatch = state.fixtures.find(f => !f.played);
   const completed = !nextMatch;
@@ -209,6 +240,7 @@ function Dashboard({ state, setState, onReset }: { state: GameState; setState: (
     </section>
     <section className="main-grid">
       <div className="left-col">
+        <SeasonSummaryCard state={state} setState={setState} />
         <MatchPanel state={state} setState={setState} />
         <FormationPitch state={state} onView={viewPlayer} />
         <TransferMarket state={state} setState={setState} onView={viewPlayer} />
