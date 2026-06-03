@@ -56,6 +56,7 @@ export interface MatchEvent {
 export interface MatchResult {
   id: string;
   round: number;
+  day: number;
   home: string;
   away: string;
   homeScore: number;
@@ -78,14 +79,23 @@ export interface SeasonSummary {
   fanGain: number;
 }
 
+export interface AcademyProspect extends Player {
+  signingFee: number;
+  rarity: 'Thường' | 'Triển vọng' | 'Wonderkid';
+}
+
 export interface GameState {
   club: Club | null;
   players: Player[];
   transferMarket: Player[];
+  academyProspects: AcademyProspect[];
   league: LeagueTeam[];
   fixtures: MatchResult[];
   currentRound: number;
   season: number;
+  day: number;
+  actionsRemaining: number;
+  maxActionsPerDay: number;
   lastMatch: MatchResult | null;
   transferMessage?: TransferMessage | null;
   lastSeasonSummary?: SeasonSummary | null;
