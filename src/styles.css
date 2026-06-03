@@ -29,6 +29,9 @@ label { color: #9fb0c8; font-size: .9rem; font-weight: 700; }
 .topbar p { margin: 0; color: #94a3b8; }
 .ghost { background: rgba(255,255,255,.08); color: #dbeafe; border: 1px solid rgba(255,255,255,.1); }
 .ghost:hover { background: rgba(255,255,255,.14); }
+.danger { background: rgba(239,68,68,.16); color: #fecaca; border: 1px solid rgba(239,68,68,.24); }
+.danger:hover { background: rgba(239,68,68,.28); }
+.small-btn { padding: .5rem .7rem; border-radius: 10px; font-size: .82rem; white-space: nowrap; }
 .stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1rem; }
 .main-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(360px, .8fr); gap: 1rem; align-items: start; }
 .left-col, .right-col { display: grid; gap: 1rem; }
@@ -41,7 +44,7 @@ label { color: #9fb0c8; font-size: .9rem; font-weight: 700; }
 .section-title h2 { margin: 0; font-size: 1.15rem; }
 .section-title span, .section-title svg { color: #94a3b8; }
 .table-wrap { overflow: auto; border-radius: 16px; border: 1px solid rgba(255,255,255,.07); }
-table { width: 100%; border-collapse: collapse; min-width: 760px; }
+table { width: 100%; border-collapse: collapse; min-width: 860px; }
 th, td { padding: .85rem; text-align: left; border-bottom: 1px solid rgba(255,255,255,.07); }
 th { color: #94a3b8; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; background: rgba(255,255,255,.04); }
 td small { display: block; color: #94a3b8; margin-top: .15rem; }
@@ -73,6 +76,21 @@ tr:last-child td { border-bottom: 0; }
 .fixture.played { opacity: .72; }
 .champion { display: grid; justify-items: center; text-align: center; padding: 1.5rem; color: #fde68a; }
 .champion svg { width: 58px; height: 58px; }
+.market-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
+.player-card { display: grid; gap: .8rem; padding: .9rem; border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: rgba(255,255,255,.045); }
+.player-card-head { display: flex; justify-content: space-between; gap: .75rem; align-items: start; }
+.player-card-head strong { display: block; }
+.player-card-head span { display: block; color: #94a3b8; font-size: .85rem; margin-top: .2rem; }
+.player-card-head b { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 14px; background: rgba(34,197,94,.14); color: #86efac; }
+.player-metrics { display: flex; flex-wrap: wrap; gap: .4rem; }
+.player-metrics span { color: #cbd5e1; background: rgba(255,255,255,.06); border-radius: 999px; padding: .28rem .5rem; font-size: .78rem; }
+.player-price { display: flex; justify-content: space-between; gap: .8rem; align-items: center; color: #94a3b8; }
+.player-price strong { color: #f8fafc; }
+.notice { margin-bottom: .9rem; padding: .75rem .85rem; border-radius: 14px; border: 1px solid rgba(255,255,255,.1); color: #dbeafe; }
+.notice-success { background: rgba(34,197,94,.14); border-color: rgba(34,197,94,.25); }
+.notice-error { background: rgba(239,68,68,.14); border-color: rgba(239,68,68,.25); }
+.notice-info { background: rgba(59,130,246,.14); border-color: rgba(59,130,246,.25); }
 
+@media (max-width: 1200px) { .market-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 1100px) { .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .main-grid { grid-template-columns: 1fr; } }
-@media (max-width: 640px) { .app-shell { padding: .85rem; } .topbar { align-items: flex-start; flex-direction: column; } .stats-grid { grid-template-columns: 1fr; } .hero-card { border-radius: 24px; padding: 1.5rem; } .tactic-grid { grid-template-columns: 1fr; } .versus { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .app-shell { padding: .85rem; } .topbar { align-items: flex-start; flex-direction: column; } .stats-grid { grid-template-columns: 1fr; } .hero-card { border-radius: 24px; padding: 1.5rem; } .tactic-grid, .market-grid { grid-template-columns: 1fr; } .versus { grid-template-columns: 1fr; } .section-title { align-items: flex-start; flex-direction: column; } }
