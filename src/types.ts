@@ -1,5 +1,6 @@
 export type Position = 'GK' | 'DF' | 'MF' | 'FW';
 export type Tactic = 'balanced' | 'attacking' | 'defensive' | 'counter' | 'possession' | 'pressing';
+export type PlayerOwnerType = 'user' | 'opponent' | 'market' | 'academy' | 'unknown';
 
 export interface Player {
   id: string;
@@ -39,6 +40,13 @@ export interface OpponentClub {
   budget: number;
   reputation: number;
   tactic: Tactic;
+}
+
+export interface PlayerOwnership {
+  playerId: string;
+  ownerType: PlayerOwnerType;
+  ownerName: string;
+  source: 'players' | 'opponentSquads' | 'transferMarket' | 'academyProspects' | 'unknown';
 }
 
 export interface LeagueTeam {
@@ -119,6 +127,7 @@ export interface GameState {
   logs: GameLog[];
   opponentClubs: Record<string, OpponentClub>;
   opponentSquads: Record<string, Player[]>;
+  playerOwnership: Record<string, PlayerOwnership>;
   league: LeagueTeam[];
   fixtures: MatchResult[];
   currentRound: number;
