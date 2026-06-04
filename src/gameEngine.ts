@@ -9,6 +9,7 @@ const MARKET_LIMIT = 48;
 const MIN_AI_SQUAD_SIZE = 18;
 const MAX_AI_SQUAD_SIZE = 26;
 const SALARY_INTERVAL_DAYS = 7;
+const AI_BAILOUT_TARGET_BUDGET = 1_250_000;
 
 const rand = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 const clamp = (value: number, min = 1, max = 99) => Math.max(min, Math.min(max, value));
@@ -75,12 +76,32 @@ function buildGameOver(state: GameState, reason: GameOverSummary['reason'], mess
   return pushNews(pushLog(next, makeLog(next, state.club.name, 'finance', message, { reason, finalBudget: state.club.budget })), makeNews(next, 'bad', 'CLB phá sản', message));
 }
 
+function processAiSalaryCycle(state: GameState): GameState {
+  let next: GameState = { ...state, opponentClubs: { ...(state.opponentClubs ?? {}) } };
+  for (const [teamName, squad] of Object.entries(state.opponentSquads ?? {})) {
+    const team = next.opponentClubs[teamName];
+    if (!team) continue;
+    const wageBill = calculateWageBill(squad ?? []);
+    const budgetAfterSalary = team.budget - wageBill;
+    if (budgetAfterSalary >= 0) {
+      next.opponentClubs[teamName] = { ...team, budget: budgetAfterSalary };
+      next = pushLog(next, makeAiLog(next, teamName, 'salary', `AI trả lương đội bóng: -${wageBill.toLocaleString('vi-VN')} VND.`, { wageBill, budgetAfter: budgetAfterSalary }));
+    } else {
+      const bailout = Math.abs(budgetAfterSalary) + AI_BAILOUT_TARGET_BUDGET;
+      next.opponentClubs[teamName] = { ...team, budget: AI_BAILOUT_TARGET_BUDGET };
+      next = pushLog(next, makeAiLog(next, teamName, 'salary_bailout', `AI trả lương bị âm tiền và được bơm quỹ cứu trợ ${bailout.toLocaleString('vi-VN')} VND.`, { wageBill, budgetBefore: team.budget, budgetAfterSalary, bailout, budgetAfter: AI_BAILOUT_TARGET_BUDGET }));
+    }
+  }
+  return next;
+}
+
 function processSalaryIfDue(state: GameState): GameState {
   if (!state.club || state.gameOver || state.day < (state.nextSalaryDay ?? SALARY_INTERVAL_DAYS)) return state;
   const wageBill = calculateWageBill(state.players);
   const paid = { ...state, club: { ...state.club, budget: state.club.budget - wageBill }, nextSalaryDay: state.day + (state.salaryIntervalDays ?? SALARY_INTERVAL_DAYS) };
   const logged = pushLog(paid, makeLog(paid, state.club.name, 'finance', `Trả lương đội bóng: -${wageBill.toLocaleString('vi-VN')} VND.`, { wageBill, nextSalaryDay: paid.nextSalaryDay, budgetAfter: paid.club.budget }));
-  return pushNews(logged, makeNews(logged, logged.club!.budget < 0 ? 'bad' : 'neutral', 'Đến kỳ trả lương', `CLB đã trả ${wageBill.toLocaleString('vi-VN')} VND tiền lương cầu thủ.`));
+  const withNews = pushNews(logged, makeNews(logged, logged.club!.budget < 0 ? 'bad' : 'neutral', 'Đến kỳ trả lương', `CLB đã trả ${wageBill.toLocaleString('vi-VN')} VND tiền lương cầu thủ.`));
+  return processAiSalaryCycle(withNews);
 }
 
 function generatePlayer(index: number, qualityOffset = 0, forcedAge?: number): Player {
@@ -134,11 +155,13 @@ function runOpponentAI(state: GameState): GameState {
     if (!squad.length) continue;
     const strength = averageOverall(squad);
     const avgFitness = Math.round(squad.slice(0, 11).reduce((sum, p) => sum + p.fitness, 0) / 11);
+    const wageBill = calculateWageBill(squad);
     const roll = rand(1, 100);
-    if (avgFitness < 72 || roll <= 35) { const trained = squad.map(p => ({ ...p, fitness: clamp(p.fitness + rand(3, 8)), morale: clamp(p.morale + rand(0, 3)), overall: clamp(p.overall + (p.age <= 22 && p.overall < p.potential && Math.random() > 0.85 ? 1 : 0)) })).sort((a, b) => b.overall - a.overall); next.opponentSquads[team.name] = trained; next = pushLog(next, makeAiLog(next, team.name, 'training', `AI huấn luyện đội hình. Sức mạnh ${strength} → ${averageOverall(trained)}.`, { strengthBefore: strength, strengthAfter: averageOverall(trained), avgFitness })); continue; }
+    if (team.budget < wageBill * 1.2 && squad.length > MIN_AI_SQUAD_SIZE) { const salaryDump = [...squad].sort((a, b) => b.salary - a.salary || b.age - a.age)[0]; const saleValue = Math.round(salaryDump.value * 0.72); next.opponentSquads[team.name] = squad.filter(p => p.id !== salaryDump.id); next.transferMarket = mergeMarket(next.transferMarket, [{ ...salaryDump, value: Math.round(salaryDump.value * 1.05) }]); next.opponentClubs[team.name] = { ...team, budget: team.budget + saleValue }; next = syncPlayerOwnership(pushLog(next, makeAiLog(next, team.name, 'financial_sale', `AI bán ${salaryDump.name} để giảm áp lực quỹ lương, thu ${saleValue.toLocaleString('vi-VN')} VND.`, { player: salaryDump.name, value: saleValue, salary: salaryDump.salary, wageBill, budgetBefore: team.budget, budgetAfter: team.budget + saleValue, playerId: salaryDump.id, squadAfter: squad.length - 1 }))); continue; }
+    if (avgFitness < 72 || roll <= 35) { const trained = squad.map(p => ({ ...p, fitness: clamp(p.fitness + rand(3, 8)), morale: clamp(p.morale + rand(0, 3)), overall: clamp(p.overall + (p.age <= 22 && p.overall < p.potential && Math.random() > 0.85 ? 1 : 0)) })).sort((a, b) => b.overall - a.overall); next.opponentSquads[team.name] = trained; next = pushLog(next, makeAiLog(next, team.name, 'training', `AI huấn luyện đội hình. Sức mạnh ${strength} → ${averageOverall(trained)}.`, { strengthBefore: strength, strengthAfter: averageOverall(trained), avgFitness, wageBill, budget: team.budget })); continue; }
     if (roll <= 55 && squad.length > MIN_AI_SQUAD_SIZE) { const oldPlayer = squad.find(p => p.age >= 31) ?? squad[squad.length - 1]; const saleValue = Math.round(oldPlayer.value * 0.8); next.opponentSquads[team.name] = squad.filter(p => p.id !== oldPlayer.id); next.transferMarket = mergeMarket(next.transferMarket, [{ ...oldPlayer, value: Math.round(oldPlayer.value * 1.1) }]); next.opponentClubs[team.name] = { ...team, budget: team.budget + saleValue }; next = syncPlayerOwnership(pushLog(next, makeAiLog(next, team.name, 'sell', `AI bán ${oldPlayer.name}, thu ${saleValue.toLocaleString('vi-VN')} VND.`, { player: oldPlayer.name, value: saleValue, budgetAfter: team.budget + saleValue, playerId: oldPlayer.id, squadAfter: squad.length - 1 }))); continue; }
-    if (roll <= 78 && team.budget > 650_000 && next.transferMarket.length && squad.length < MAX_AI_SQUAD_SIZE) { const affordable = next.transferMarket.filter(p => p.value <= team.budget && p.overall >= Math.max(58, strength - 4)).sort((a, b) => b.overall - a.overall); const target = affordable[0]; if (target) { next.opponentSquads[team.name] = [...squad, target].sort((a, b) => b.overall - a.overall); next.transferMarket = next.transferMarket.filter(p => p.id !== target.id); next.opponentClubs[team.name] = { ...team, budget: team.budget - target.value }; next = syncPlayerOwnership(pushLog(next, makeAiLog(next, team.name, 'buy', `AI mua ${target.name} với giá ${target.value.toLocaleString('vi-VN')} VND.`, { player: target.name, value: target.value, budgetAfter: team.budget - target.value, playerId: target.id, squadAfter: squad.length + 1 }))); continue; } }
-    const tactic = strength < 63 ? 'defensive' : avgFitness > 84 ? 'pressing' : tactics[rand(0, tactics.length - 1)]; next.opponentClubs[team.name] = { ...team, tactic }; next = pushLog(next, makeAiLog(next, team.name, 'tactic', `AI điều chỉnh chiến thuật sang ${tactic}.`, { tactic, strength, avgFitness, squadSize: squad.length }));
+    if (roll <= 78 && team.budget > Math.max(650_000, wageBill * 2) && next.transferMarket.length && squad.length < MAX_AI_SQUAD_SIZE) { const affordable = next.transferMarket.filter(p => p.value <= team.budget - wageBill && p.overall >= Math.max(58, strength - 4) && p.salary <= Math.max(8_000, wageBill * 0.28)).sort((a, b) => b.overall - a.overall); const target = affordable[0]; if (target) { next.opponentSquads[team.name] = [...squad, target].sort((a, b) => b.overall - a.overall); next.transferMarket = next.transferMarket.filter(p => p.id !== target.id); next.opponentClubs[team.name] = { ...team, budget: team.budget - target.value }; next = syncPlayerOwnership(pushLog(next, makeAiLog(next, team.name, 'buy', `AI mua ${target.name} với giá ${target.value.toLocaleString('vi-VN')} VND.`, { player: target.name, value: target.value, salary: target.salary, wageBill, budgetAfter: team.budget - target.value, playerId: target.id, squadAfter: squad.length + 1 }))); continue; } }
+    const tactic = strength < 63 ? 'defensive' : avgFitness > 84 ? 'pressing' : tactics[rand(0, tactics.length - 1)]; next.opponentClubs[team.name] = { ...team, tactic }; next = pushLog(next, makeAiLog(next, team.name, 'tactic', `AI điều chỉnh chiến thuật sang ${tactic}.`, { tactic, strength, avgFitness, squadSize: squad.length, wageBill, budget: team.budget }));
   }
   return syncPlayerOwnership(next);
 }
