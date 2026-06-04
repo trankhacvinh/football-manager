@@ -22,6 +22,9 @@ export interface Player {
   passing: number;
   shooting: number;
   goalkeeping: number;
+  avatarUrl?: string;
+  isVip?: boolean;
+  realWorldName?: string;
 }
 
 export interface Club {
