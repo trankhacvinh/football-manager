@@ -62,7 +62,13 @@ export function checkPlayerIntegrity(state: GameState): PlayerIntegrityIssue[] {
 
 export function syncPlayerOwnership(state: GameState): GameState {
   const withOwnership = { ...state, playerOwnership: buildPlayerOwnership(state) };
-  return { ...withOwnership, ownershipIssues: checkPlayerIntegrity(withOwnership) };
+  const ownershipIssues = checkPlayerIntegrity(withOwnership);
+  let next: GameState = { ...withOwnership, ownershipIssues };
+  const existingIssueIds = new Set((state.logs ?? []).map(log => typeof log.meta?.issueId === 'string' ? log.meta.issueId : '').filter(Boolean));
+  for (const issue of ownershipIssues.filter(issue => !existingIssueIds.has(issue.id)).slice(0, 8)) {
+    next = pushLog(next, makeLog(next, 'Integrity Check', 'system', `Ownership ${issue.severity}: ${issue.message}`, { issueId: issue.id, issueType: issue.type, playerId: issue.playerId, player: issue.playerName, locations: issue.locations.join(' | ') }));
+  }
+  return next;
 }
 
 function generatePlayer(index: number, qualityOffset = 0, forcedAge?: number): Player {
