@@ -1,20 +1,21 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Trophy, Users, CalendarDays, Dumbbell, RotateCcw, Play, WalletCards, ShoppingCart, RefreshCw, X, Eye, ChevronsRight, Search, Moon, Newspaper } from 'lucide-react';
+import { Trophy, Users, CalendarDays, Dumbbell, RotateCcw, Play, WalletCards, ShoppingCart, RefreshCw, X, Eye, ChevronsRight, Search, Moon, Newspaper, ListFilter } from 'lucide-react';
 import { advanceDay, buyPlayer, createNewGame, getTodayMatch, refreshTransferMarket, restTeam, scoutAcademy, sellPlayer, setLineup, setTactic, signAcademyProspect, simulateNextRound, startNextSeason, trainTeam } from './gameEngine';
 import { clearGame, loadGame, saveGame } from './storage';
-import type { AcademyProspect, GameState, LeagueTeam, Player, Position, Tactic } from './types';
+import type { AcademyProspect, GameLog, GameState, Player, Position, Tactic } from './types';
 import './styles.css';
 import './news.css';
 import './layout.css';
 
 const currency = new Intl.NumberFormat('vi-VN');
 const tacticLabels: Record<Tactic, string> = { balanced: 'Cân bằng', attacking: 'Tấn công', defensive: 'Phòng ngự', counter: 'Phản công', possession: 'Kiểm soát bóng', pressing: 'Pressing tầm cao' };
+const logTypeLabels: Record<GameLog['type'], string> = { ai: 'AI', transfer: 'Chuyển nhượng', training: 'Huấn luyện', finance: 'Tài chính', tactic: 'Chiến thuật', match: 'Trận đấu', system: 'Hệ thống' };
 const money = (value: number) => `${currency.format(value)} VND`;
-const ensureState = (state: GameState): GameState => ({ ...state, day: state.day ?? 1, actionsRemaining: state.actionsRemaining ?? 3, maxActionsPerDay: state.maxActionsPerDay ?? 3, academyProspects: state.academyProspects ?? [], news: state.news ?? [], opponentSquads: state.opponentSquads ?? {} });
+const ensureState = (state: GameState): GameState => ({ ...state, day: state.day ?? 1, actionsRemaining: state.actionsRemaining ?? 3, maxActionsPerDay: state.maxActionsPerDay ?? 3, academyProspects: state.academyProspects ?? [], news: state.news ?? [], logs: state.logs ?? [], opponentClubs: state.opponentClubs ?? {}, opponentSquads: state.opponentSquads ?? {} });
 
 type PlayerOrigin = 'squad' | 'market' | 'academy';
-type ActiveTab = 'overview' | 'squad' | 'transfer' | 'league';
+type ActiveTab = 'overview' | 'squad' | 'transfer' | 'league' | 'logs';
 
 function averageOverall(players: Player[]) {
   if (!players.length) return 0;
@@ -55,6 +56,20 @@ function NewsPanel({ state }: { state: GameState }) {
   return <div className="card news-card"><div className="section-title"><h2>Tin tức CLB</h2><Newspaper /></div>{news.length === 0 ? <p>Chưa có tin tức nào.</p> : <div className="news-list">{news.slice(0, 8).map(item => <div key={item.id} className={`news-item news-${item.type}`}><span>Mùa {item.season} • Ngày {item.day}</span><strong>{item.title}</strong><p>{item.text}</p></div>)}</div>}</div>;
 }
 
+function LogsPanel({ state }: { state: GameState }) {
+  const [query, setQuery] = useState('');
+  const [type, setType] = useState<'all' | GameLog['type']>('all');
+  const logs = state.logs ?? [];
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredLogs = logs.filter(log => {
+    const matchesType = type === 'all' || log.type === type;
+    const haystack = `${log.actor} ${log.message} ${log.type} ${Object.values(log.meta ?? {}).join(' ')}`.toLowerCase();
+    return matchesType && (!normalizedQuery || haystack.includes(normalizedQuery));
+  });
+
+  return <div className="card clean-card logs-card"><div className="section-title"><div><h2>Nhật ký hệ thống</h2><p>Kiểm tra mọi hành động của người chơi, AI đội đối thủ, chuyển nhượng, tài chính và trận đấu.</p></div><ListFilter /></div><div className="log-toolbar"><input placeholder="Tìm đội, cầu thủ, nội dung log..." value={query} onChange={e => setQuery(e.target.value)} /><select value={type} onChange={e => setType(e.target.value as 'all' | GameLog['type'])}><option value="all">Tất cả loại log</option>{Object.entries(logTypeLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div><div className="log-summary"><span>Tổng log: {logs.length}</span><span>Đang hiển thị: {filteredLogs.length}</span></div><div className="log-list">{filteredLogs.length === 0 ? <p className="muted">Chưa có log phù hợp. Hãy sang ngày mới để AI đối thủ tự hành động.</p> : filteredLogs.slice(0, 120).map(log => <div key={log.id} className={`log-item log-${log.type}`}><div className="log-meta"><span>Mùa {log.season} • Ngày {log.day}</span><b>{logTypeLabels[log.type]}</b></div><strong>{log.actor}</strong><p>{log.message}</p>{log.meta && Object.keys(log.meta).length > 0 && <code>{JSON.stringify(log.meta)}</code>}</div>)}</div></div>;
+}
+
 function FormationPitch({ state, onView }: { state: GameState; onView: (player: Player, origin: PlayerOrigin) => void }) {
   const selected = (state.club?.lineup ?? []).map(id => state.players.find(p => p.id === id)).filter(Boolean) as Player[];
   const group = (pos: Position) => selected.filter(p => p.position === pos);
@@ -88,13 +103,12 @@ function OpponentsPanel({ state }: { state: GameState }) {
   const opponents = state.league.filter(team => team.name !== state.club?.name);
   const selected = opponents.find(team => team.name === selectedName) ?? opponents[0];
   const squad = selected ? state.opponentSquads?.[selected.name] ?? [] : [];
+  const opponentClub = selected ? state.opponentClubs?.[selected.name] : null;
   const myPower = averageOverall(state.players);
   const oppPower = squad.length ? averageOverall(squad) : selected?.power ?? 0;
   const diff = oppPower - myPower;
-
   if (!selected) return null;
-
-  return <div className="card clean-card"><div className="section-title"><h2>Đối thủ trong giải</h2><span>So sánh với {state.club?.name}</span></div><div className="opponent-layout"><div className="opponent-list">{opponents.map(team => <button key={team.id} className={team.name === selected.name ? 'active' : ''} onClick={() => setSelectedName(team.name)}><strong>{team.name}</strong><span>Power {state.opponentSquads?.[team.name]?.length ? averageOverall(state.opponentSquads[team.name]) : team.power}</span></button>)}</div><div className="opponent-detail"><div className="opponent-hero"><div><span>Đối thủ</span><h3>{selected.name}</h3><p>{selected.played} trận • {selected.points} điểm • Hiệu số {selected.goalsFor - selected.goalsAgainst}</p></div><div className="power-badge"><span>Sức mạnh</span><strong>{oppPower}</strong></div></div><div className="compare-grid"><div><span>Đội anh</span><strong>{myPower}</strong></div><div><span>Đối thủ</span><strong>{oppPower}</strong></div><div><span>Chênh lệch</span><strong className={diff > 0 ? 'danger-text' : 'good-text'}>{diff > 0 ? '+' : ''}{diff}</strong></div></div>{squad.length ? <div className="opponent-squad"><h4>Cầu thủ nổi bật</h4>{squad.slice(0, 11).map(player => <div key={player.id} className="opponent-player"><span className={`pos pos-${player.position.toLowerCase()}`}>{player.position}</span><strong>{player.name}</strong><em>OVR {player.overall} • POT {player.potential}</em></div>)}</div> : <p className="muted">Chưa có dữ liệu cầu thủ đối thủ cho save cũ. Tạo career mới hoặc sang mùa mới để hệ thống sinh đội hình đối thủ.</p>}</div></div></div>;
+  return <div className="card clean-card"><div className="section-title"><h2>Đối thủ trong giải</h2><span>So sánh với {state.club?.name}</span></div><div className="opponent-layout"><div className="opponent-list">{opponents.map(team => <button key={team.id} className={team.name === selected.name ? 'active' : ''} onClick={() => setSelectedName(team.name)}><strong>{team.name}</strong><span>Power {state.opponentSquads?.[team.name]?.length ? averageOverall(state.opponentSquads[team.name]) : team.power}</span></button>)}</div><div className="opponent-detail"><div className="opponent-hero"><div><span>Đối thủ</span><h3>{selected.name}</h3><p>{selected.played} trận • {selected.points} điểm • Hiệu số {selected.goalsFor - selected.goalsAgainst}</p>{opponentClub && <p>Ngân sách AI: {money(opponentClub.budget)} • Chiến thuật: {tacticLabels[opponentClub.tactic]}</p>}</div><div className="power-badge"><span>Sức mạnh</span><strong>{oppPower}</strong></div></div><div className="compare-grid"><div><span>Đội anh</span><strong>{myPower}</strong></div><div><span>Đối thủ</span><strong>{oppPower}</strong></div><div><span>Chênh lệch</span><strong className={diff > 0 ? 'danger-text' : 'good-text'}>{diff > 0 ? '+' : ''}{diff}</strong></div></div>{squad.length ? <div className="opponent-squad"><h4>Cầu thủ nổi bật</h4>{squad.slice(0, 11).map(player => <div key={player.id} className="opponent-player"><span className={`pos pos-${player.position.toLowerCase()}`}>{player.position}</span><strong>{player.name}</strong><em>OVR {player.overall} • POT {player.potential}</em></div>)}</div> : <p className="muted">Chưa có dữ liệu cầu thủ đối thủ cho save cũ. Tạo career mới hoặc sang mùa mới để hệ thống sinh đội hình đối thủ.</p>}</div></div></div>;
 }
 
 function SeasonSummaryCard({ state, setState }: { state: GameState; setState: (s: GameState) => void }) {
@@ -135,13 +149,8 @@ function Dashboard({ state: rawState, setState, onReset }: { state: GameState; s
   const closeModal = () => setSelectedPlayer(null);
   const selectedCost = selectedOrigin === 'academy' ? (selectedPlayer as AcademyProspect | null)?.signingFee ?? 0 : selectedPlayer?.value ?? 0;
   const selectedCanBuy = club.budget >= selectedCost;
-  const tabs: Array<[ActiveTab, string]> = [['overview', 'Tổng quan'], ['squad', 'Đội hình'], ['transfer', 'Chuyển nhượng'], ['league', 'Giải đấu']];
-
-  return <main className="app-shell"><header className="topbar"><div><span className="badge">Mùa {state.season} • Ngày {state.day}</span><h1>{club.name}</h1><p>{club.stadium}</p></div><button className="ghost" onClick={onReset}><RotateCcw size={16} /> Chơi lại</button></header><StickyStatusBar state={state} /><nav className="manager-tabs">{tabs.map(([key, label]) => <button key={key} className={activeTab === key ? 'active' : ''} onClick={() => setActiveTab(key)}>{label}</button>)}</nav>{activeTab === 'overview' && <section className="overview-hero"><div className="page-stack"><SeasonSummaryCard state={state} setState={setState} /><CalendarPanel state={state} setState={setState} /><MatchPanel state={state} setState={setState} /></div><div className="page-stack"><NewsPanel state={state} /><Tactics state={state} setState={setState} /><TrainingPanel state={state} setState={setState} /></div></section>}{activeTab === 'squad' && <section className="page-grid"><div className="page-stack"><div className="focus-title"><div><h2>Đội hình & cầu thủ</h2><p>Chọn 11 người đá chính và kiểm tra sức mạnh đội bóng.</p></div></div><FormationPitch state={state} onView={viewPlayer} /></div><div className="page-stack"><Tactics state={state} setState={setState} /><TrainingPanel state={state} setState={setState} /></div><div style={{ gridColumn: '1 / -1' }}><PlayersTable state={state} setState={setState} onView={viewPlayer} /></div></section>}{activeTab === 'transfer' && <section className="page-stack"><div className="focus-title"><div><h2>Chuyển nhượng & học viện</h2><p>Mua cầu thủ, bán cầu thủ và săn tài năng trẻ.</p></div></div><div className="two-column-panel"><AcademyPanel state={state} setState={setState} onView={viewPlayer} /><TransferMarket state={state} setState={setState} onView={viewPlayer} /></div></section>}{activeTab === 'league' && <section className="page-stack"><div className="focus-title"><div><h2>Giải đấu & đối thủ</h2><p>Theo dõi bảng xếp hạng, lịch thi đấu và phân tích các đội còn lại.</p></div></div><div className="page-grid"><LeagueTable state={state} /><Fixtures state={state} /></div><OpponentPanelWrapper state={state} /></section>}<PlayerDetailModal player={selectedPlayer} origin={selectedOrigin} canBuy={selectedCanBuy} onClose={closeModal} onBuy={() => { if (selectedPlayer) setState(buyPlayer(state, selectedPlayer.id)); closeModal(); }} onSign={() => { if (selectedPlayer) setState(signAcademyProspect(state, selectedPlayer.id)); closeModal(); }} onSell={() => { if (selectedPlayer) setState(sellPlayer(state, selectedPlayer.id)); closeModal(); }} /></main>;
-}
-
-function OpponentPanelWrapper({ state }: { state: GameState }) {
-  return <OpponentsPanel state={state} />;
+  const tabs: Array<[ActiveTab, string]> = [['overview', 'Tổng quan'], ['squad', 'Đội hình'], ['transfer', 'Chuyển nhượng'], ['league', 'Giải đấu'], ['logs', 'Nhật ký']];
+  return <main className="app-shell"><header className="topbar"><div><span className="badge">Mùa {state.season} • Ngày {state.day}</span><h1>{club.name}</h1><p>{club.stadium}</p></div><button className="ghost" onClick={onReset}><RotateCcw size={16} /> Chơi lại</button></header><StickyStatusBar state={state} /><nav className="manager-tabs">{tabs.map(([key, label]) => <button key={key} className={activeTab === key ? 'active' : ''} onClick={() => setActiveTab(key)}>{label}</button>)}</nav>{activeTab === 'overview' && <section className="overview-hero"><div className="page-stack"><SeasonSummaryCard state={state} setState={setState} /><CalendarPanel state={state} setState={setState} /><MatchPanel state={state} setState={setState} /></div><div className="page-stack"><NewsPanel state={state} /><Tactics state={state} setState={setState} /><TrainingPanel state={state} setState={setState} /></div></section>}{activeTab === 'squad' && <section className="page-grid"><div className="page-stack"><div className="focus-title"><div><h2>Đội hình & cầu thủ</h2><p>Chọn 11 người đá chính và kiểm tra sức mạnh đội bóng.</p></div></div><FormationPitch state={state} onView={viewPlayer} /></div><div className="page-stack"><Tactics state={state} setState={setState} /><TrainingPanel state={state} setState={setState} /></div><div style={{ gridColumn: '1 / -1' }}><PlayersTable state={state} setState={setState} onView={viewPlayer} /></div></section>}{activeTab === 'transfer' && <section className="page-stack"><div className="focus-title"><div><h2>Chuyển nhượng & học viện</h2><p>Mua cầu thủ, bán cầu thủ và săn tài năng trẻ.</p></div></div><div className="two-column-panel"><AcademyPanel state={state} setState={setState} onView={viewPlayer} /><TransferMarket state={state} setState={setState} onView={viewPlayer} /></div></section>}{activeTab === 'league' && <section className="page-stack"><div className="focus-title"><div><h2>Giải đấu & đối thủ</h2><p>Theo dõi bảng xếp hạng, lịch thi đấu và phân tích các đội còn lại.</p></div></div><div className="page-grid"><LeagueTable state={state} /><Fixtures state={state} /></div><OpponentsPanel state={state} /></section>}{activeTab === 'logs' && <section className="page-stack"><div className="focus-title"><div><h2>Nhật ký & debug</h2><p>Xem toàn bộ quyết định AI và hành động của đội bóng.</p></div></div><LogsPanel state={state} /></section>}<PlayerDetailModal player={selectedPlayer} origin={selectedOrigin} canBuy={selectedCanBuy} onClose={closeModal} onBuy={() => { if (selectedPlayer) setState(buyPlayer(state, selectedPlayer.id)); closeModal(); }} onSign={() => { if (selectedPlayer) setState(signAcademyProspect(state, selectedPlayer.id)); closeModal(); }} onSell={() => { if (selectedPlayer) setState(sellPlayer(state, selectedPlayer.id)); closeModal(); }} /></main>;
 }
 
 function App() {
