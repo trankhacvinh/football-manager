@@ -99,6 +99,7 @@ export interface GameState {
   transferMarket: Player[];
   academyProspects: AcademyProspect[];
   news: ClubNews[];
+  opponentSquads: Record<string, Player[]>;
   league: LeagueTeam[];
   fixtures: MatchResult[];
   currentRound: number;
