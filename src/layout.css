@@ -1,0 +1,111 @@
+.manager-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  gap: .7rem;
+  padding: .75rem;
+  margin-bottom: 1rem;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 22px;
+  background: rgba(7,17,31,.82);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 18px 50px rgba(0,0,0,.22);
+  overflow: auto;
+}
+
+.manager-tabs button {
+  min-width: max-content;
+  padding: .75rem 1rem;
+  background: rgba(255,255,255,.06);
+  color: #cbd5e1;
+  border: 1px solid rgba(255,255,255,.08);
+}
+
+.manager-tabs button.active {
+  background: linear-gradient(135deg, #16a34a, #22c55e);
+  color: white;
+  box-shadow: 0 12px 28px rgba(34,197,94,.22);
+}
+
+.page-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(340px, .75fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.page-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.overview-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.clean-card {
+  border-radius: 28px;
+}
+
+.command-card {
+  background: linear-gradient(160deg, rgba(15,23,42,.9), rgba(22,101,52,.34));
+}
+
+.management-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.two-column-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.compact-table-card .table-wrap {
+  max-height: 720px;
+}
+
+.focus-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.focus-title h2 {
+  margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2.4rem);
+  letter-spacing: -.04em;
+}
+
+.focus-title p {
+  margin: .25rem 0 0;
+  color: #94a3b8;
+}
+
+@media (max-width: 1100px) {
+  .page-grid,
+  .overview-hero,
+  .two-column-panel {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .manager-tabs {
+    border-radius: 18px;
+    padding: .5rem;
+  }
+
+  .manager-tabs button {
+    padding: .65rem .8rem;
+    font-size: .88rem;
+  }
+}
