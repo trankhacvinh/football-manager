@@ -34,6 +34,13 @@ export interface Club {
   lineup: string[];
 }
 
+export interface OpponentClub {
+  name: string;
+  budget: number;
+  reputation: number;
+  tactic: Tactic;
+}
+
 export interface LeagueTeam {
   id: string;
   name: string;
@@ -93,12 +100,24 @@ export interface ClubNews {
   text: string;
 }
 
+export interface GameLog {
+  id: string;
+  day: number;
+  season: number;
+  actor: string;
+  type: 'ai' | 'transfer' | 'training' | 'finance' | 'tactic' | 'match' | 'system';
+  message: string;
+  meta?: Record<string, string | number>;
+}
+
 export interface GameState {
   club: Club | null;
   players: Player[];
   transferMarket: Player[];
   academyProspects: AcademyProspect[];
   news: ClubNews[];
+  logs: GameLog[];
+  opponentClubs: Record<string, OpponentClub>;
   opponentSquads: Record<string, Player[]>;
   league: LeagueTeam[];
   fixtures: MatchResult[];
