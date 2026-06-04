@@ -59,6 +59,19 @@ export interface PlayerIntegrityIssue {
   locations: string[];
 }
 
+export interface GameOverSummary {
+  season: number;
+  day: number;
+  reason: 'bankrupt';
+  title: string;
+  message: string;
+  finalBudget: number;
+  fans: number;
+  reputation: number;
+  players: number;
+  leagueRank: number;
+}
+
 export interface LeagueTeam {
   id: string;
   name: string;
@@ -146,6 +159,9 @@ export interface GameState {
   day: number;
   actionsRemaining: number;
   maxActionsPerDay: number;
+  nextSalaryDay: number;
+  salaryIntervalDays: number;
+  gameOver: GameOverSummary | null;
   lastMatch: MatchResult | null;
   transferMessage?: TransferMessage | null;
   lastSeasonSummary?: SeasonSummary | null;
