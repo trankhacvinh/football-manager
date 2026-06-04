@@ -49,6 +49,16 @@ export interface PlayerOwnership {
   source: 'players' | 'opponentSquads' | 'transferMarket' | 'academyProspects' | 'unknown';
 }
 
+export interface PlayerIntegrityIssue {
+  id: string;
+  severity: 'warning' | 'error';
+  playerId: string;
+  playerName: string;
+  type: 'duplicate' | 'missing_owner' | 'owner_mismatch' | 'orphan_registry';
+  message: string;
+  locations: string[];
+}
+
 export interface LeagueTeam {
   id: string;
   name: string;
@@ -128,6 +138,7 @@ export interface GameState {
   opponentClubs: Record<string, OpponentClub>;
   opponentSquads: Record<string, Player[]>;
   playerOwnership: Record<string, PlayerOwnership>;
+  ownershipIssues: PlayerIntegrityIssue[];
   league: LeagueTeam[];
   fixtures: MatchResult[];
   currentRound: number;
