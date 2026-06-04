@@ -59,6 +59,20 @@ export interface PlayerIntegrityIssue {
   locations: string[];
 }
 
+export interface SideMission {
+  id: string;
+  title: string;
+  description: string;
+  minFans: number;
+  minReputation: number;
+  baseReward: number;
+  fanReward: number;
+  reputationReward: number;
+  fanGain: number;
+  reputationGain: number;
+  cooldownDays: number;
+}
+
 export interface GameOverSummary {
   season: number;
   day: number;
@@ -152,6 +166,7 @@ export interface GameState {
   opponentSquads: Record<string, Player[]>;
   playerOwnership: Record<string, PlayerOwnership>;
   ownershipIssues: PlayerIntegrityIssue[];
+  sideMissionCooldowns?: Record<string, number>;
   league: LeagueTeam[];
   fixtures: MatchResult[];
   currentRound: number;
