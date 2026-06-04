@@ -71,6 +71,13 @@ export function generateAcademyProspects(count = 3): AcademyProspect[] {
   }).sort((a, b) => b.potential - a.potential);
 }
 
+function generateOpponentSquads(teamNames: string[]): Record<string, Player[]> {
+  return Object.fromEntries(teamNames.map((name, teamIndex) => [
+    name,
+    Array.from({ length: 22 }, (_, i) => generatePlayer(i, rand(-6, 10) + Math.floor(teamIndex / 2))).sort((a, b) => b.overall - a.overall),
+  ]));
+}
+
 export function buildDefaultLineup(players: Player[]): string[] {
   const pick = (pos: Position, count: number) => players.filter(p => p.position === pos).slice(0, count).map(p => p.id);
   return [...pick('GK', 1), ...pick('DF', 4), ...pick('MF', 4), ...pick('FW', 2)];
@@ -92,7 +99,8 @@ export function createNewGame(clubName: string, stadium: string): GameState {
   const players = generatePlayers();
   const club: Club = { id: id(), name: clubName.trim() || 'PMEDIA FC', stadium: stadium.trim() || 'Empire Arena', budget: 5_000_000, reputation: 25, fans: 8_000, tactic: 'balanced', lineup: buildDefaultLineup(players) };
   const league = createLeague(club.name);
-  const state: GameState = { club, players, transferMarket: generateTransferMarket(), academyProspects: [], news: [], league, fixtures: createFixtures(club.name, league.map(t => t.name)), currentRound: 1, season: 1, day: 1, actionsRemaining: MAX_ACTIONS, maxActionsPerDay: MAX_ACTIONS, lastMatch: null, transferMessage: null, lastSeasonSummary: null };
+  const opponentNames = league.map(t => t.name).filter(name => name !== club.name);
+  const state: GameState = { club, players, transferMarket: generateTransferMarket(), academyProspects: [], news: [], opponentSquads: generateOpponentSquads(opponentNames), league, fixtures: createFixtures(club.name, league.map(t => t.name)), currentRound: 1, season: 1, day: 1, actionsRemaining: MAX_ACTIONS, maxActionsPerDay: MAX_ACTIONS, lastMatch: null, transferMessage: null, lastSeasonSummary: null };
   return pushNews(state, makeNews(state, 'neutral', 'Mùa giải bắt đầu', `${club.name} chính thức bước vào mùa giải đầu tiên.`));
 }
 
@@ -318,6 +326,7 @@ export function startNextSeason(state: GameState): GameState {
   const players = state.players.map(progressPlayerForNewSeason).sort((a, b) => b.overall - a.overall);
   const club: Club = { ...state.club, budget: state.club.budget + reward.prize, reputation: clamp(state.club.reputation + reward.reputationGain, 1, 100), fans: Math.max(0, state.club.fans + reward.fanGain), lineup: buildDefaultLineup(players) };
   const league = createLeague(club.name);
-  const next = { ...state, club, players, transferMarket: generateTransferMarket(), academyProspects: [], league, fixtures: createFixtures(club.name, league.map(t => t.name)), currentRound: 1, season: state.season + 1, day: 1, actionsRemaining: MAX_ACTIONS, maxActionsPerDay: MAX_ACTIONS, lastMatch: null, transferMessage: msg('info', 'Mùa giải mới đã bắt đầu. Lịch thi đấu và thị trường chuyển nhượng đã được làm mới.'), lastSeasonSummary: { season: state.season, champion, userRank, prize: reward.prize, reputationGain: reward.reputationGain, fanGain: reward.fanGain } };
+  const opponentNames = league.map(t => t.name).filter(name => name !== club.name);
+  const next = { ...state, club, players, transferMarket: generateTransferMarket(), academyProspects: [], opponentSquads: generateOpponentSquads(opponentNames), league, fixtures: createFixtures(club.name, league.map(t => t.name)), currentRound: 1, season: state.season + 1, day: 1, actionsRemaining: MAX_ACTIONS, maxActionsPerDay: MAX_ACTIONS, lastMatch: null, transferMessage: msg('info', 'Mùa giải mới đã bắt đầu. Lịch thi đấu và thị trường chuyển nhượng đã được làm mới.'), lastSeasonSummary: { season: state.season, champion, userRank, prize: reward.prize, reputationGain: reward.reputationGain, fanGain: reward.fanGain } };
   return pushNews(next, makeNews(next, 'good', `Mùa ${state.season} khép lại`, `${champion} vô địch. ${club.name} nhận thưởng ${reward.prize.toLocaleString('vi-VN')} VND và bước vào mùa mới.`));
 }
