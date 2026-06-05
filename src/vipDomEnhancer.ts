@@ -1,3 +1,2 @@
 import './vip.css';
-const vips=['Lionel Messi','Cristiano Ronaldo','Kylian Mbappé','Kylian Mbappe','Erling Haaland','Kevin De Bruyne'];
-function run(){document.querySelectorAll('.player-card,tr,.player-modal,.pitch-player,.opponent-player').forEach(e=>{const n=vips.find(x=>(e.textContent||'').includes(x));if(!n)return;e.classList.add('vip-player-card');const t=e.querySelector('strong,h2')||e;if(!t.querySelector('.vip-badge')){const b=document.createElement('span');b.className='vip-badge';b.textContent='
+export {};
