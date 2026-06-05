@@ -1,5 +1,3 @@
 import './vip.css';
 const vips=['Lionel Messi','Cristiano Ronaldo','Kylian Mbappé','Kylian Mbappe','Erling Haaland','Kevin De Bruyne'];
-const avatar=(n:string)=>`https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(n.replace('é','e'))}`;
-function hit(t:string){return vips.find(n=>t.includes(n));}
-function badge(e:Element){if(e.querySelector('.vip-badge'))return;const b=document.createElement('span');b.className='vip-badge';b.textContent='VIP';e.appendChild(b)}
+function run(){document.querySelectorAll('.player-card,tr,.player-modal,.pitch-player,.opponent-player').forEach(e=>{const n=vips.find(x=>(e.textContent||'').includes(x));if(!n)return;e.classList.add('vip-player-card');const t=e.querySelector('strong,h2')||e;if(!t.querySelector('.vip-badge')){const b=document.createElement('span');b.className='vip-badge';b.textContent='
