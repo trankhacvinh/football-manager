@@ -1,18 +1,1 @@
-.vip-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: .45rem;
-  padding: .16rem .42rem;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #f59e0b, #facc15);
-  color: #111827;
-  font-size: .64rem;
-  font-weight: 1000;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  box-shadow: 0 8px 22px rgba(250, 204, 21, .22);
-  vertical-align: middle;
-}
-
-.vip
+.vip-badge{display:inline-flex;margin-left:.4rem;padding:.16rem .44rem;border-radius:999px;background:linear-gradient(135deg,#f59e0b,#facc15);color:#111827;font-size:.65rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase;vertical-align:middle}.vip-avatar{width:54px;height:54px;border-radius:999px;border:2px solid rgba(250,204,21,.75);background:#0f172a;box-shadow:0 12px 30px rgba(250,204,21,.18);object-fit:cover}.vip-avatar-compact{width:28
