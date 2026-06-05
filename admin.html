@@ -1,1 +1,19 @@
-<!doctype html><html><head><title>Player Admin</title></head><body><h1>Player Admin</h1><p id="status">Loading...</p><pre id="out"></pre><script>const K='football-empire-manager-save-v1';const raw=localStorage.getItem(K);const out=document.getElementById('out');const st=document.getElementById('status');if(!raw){st.textContent='No save found.';}else{const s=JSON.parse(raw);st.textContent='Save loaded.';out.textContent='Club: '+(s.club&&s.club.name)+'\nPlayers: '+(s.players
+<!doctype html>
+<html>
+<head>
+  <title>Player Admin</title>
+</head>
+<body>
+  <h1>Player Admin</h1>
+  <p id="status">Loading...</p>
+  <pre id="out"></pre>
+  <script>
+    var K='football-empire-manager-save-v1';
+    var raw=localStorage.getItem(K);
+    var st=document.getElementById('status');
+    var out=document.getElementById('out');
+    if(!raw){
+      st.textContent='No save found.';
+    }else{
+      var s=JSON.parse(raw);
+      st
