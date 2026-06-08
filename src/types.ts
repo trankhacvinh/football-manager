@@ -1,6 +1,7 @@
 export type Position = 'GK' | 'DF' | 'MF' | 'FW';
 export type Tactic = 'balanced' | 'attacking' | 'defensive' | 'counter' | 'possession' | 'pressing';
 export type PlayerOwnerType = 'user' | 'opponent' | 'market' | 'academy' | 'unknown';
+export type PlayerStatus = 'available' | 'injured' | 'suspended';
 
 export interface Player {
   id: string;
@@ -25,6 +26,9 @@ export interface Player {
   avatarUrl?: string;
   isVip?: boolean;
   realWorldName?: string;
+  status?: PlayerStatus;
+  injuryUntilDay?: number;
+  suspendedUntilDay?: number;
 }
 
 export interface Club {
@@ -106,6 +110,10 @@ export interface MatchEvent {
   minute: number;
   text: string;
   type: 'info' | 'goal' | 'card' | 'injury' | 'save';
+  scorerId?: string;
+  assisterId?: string;
+  playerId?: string;
+  cardEnriched?: boolean;
 }
 
 export interface MatchResult {
@@ -118,6 +126,7 @@ export interface MatchResult {
   awayScore: number;
   events: MatchEvent[];
   played: boolean;
+  scorersEnriched?: boolean;
 }
 
 export interface TransferMessage {
@@ -132,6 +141,17 @@ export interface SeasonSummary {
   prize: number;
   reputationGain: number;
   fanGain: number;
+}
+
+export interface PlayerSeasonStats {
+  apps: number;
+  goals: number;
+  assists: number;
+  yellowCards: number;
+  redCards: number;
+  injuries: number;
+  ratingTotal: number;
+  ratingCount: number;
 }
 
 export interface AcademyProspect extends Player {
@@ -170,6 +190,8 @@ export interface GameState {
   playerOwnership: Record<string, PlayerOwnership>;
   ownershipIssues: PlayerIntegrityIssue[];
   sideMissionCooldowns?: Record<string, number>;
+  playerStats?: Record<string, PlayerSeasonStats>;
+  lineupWarning?: string;
   league: LeagueTeam[];
   fixtures: MatchResult[];
   currentRound: number;
